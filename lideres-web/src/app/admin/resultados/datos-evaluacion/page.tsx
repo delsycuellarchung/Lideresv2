@@ -52,10 +52,11 @@ export default function DatosEvaluacionPage() {
 
   const codigosCompetencias = Object.keys(competenciasAgrupadas);
   const codigosEstilos = Object.keys(estilosAgrupados);
+  const todasAfirmaciones = React.useMemo(() => afirmaciones.filter(a => a.codigo), [afirmaciones]);
 
   return (
     <section style={{ padding: '12px 24px 20px 24px' }}>
-      <h1 style={{ margin: '0 0 0 12px', fontSize: 28, fontWeight: 800, textTransform: 'uppercase', transform: 'translateY(-32px)' }}>Datos Evaluacion</h1>
+      <h1 style={{ margin: '0 0 0 12px', fontSize: 28, fontWeight: 800, transform: 'translateY(-70px)' }}>Datos evaluacion</h1>
       <div style={{ marginTop: -12, marginLeft: 12 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, color: '#2f2f2f' }}>
           <thead>
@@ -64,55 +65,35 @@ export default function DatosEvaluacionPage() {
               <th style={{ padding: '10px 10px', width: 160 }}>Evaluado</th>
               <th style={{ padding: '10px 10px', width: 120 }}>Evaluador</th>
               <th style={{ padding: '10px 10px', width: 100 }}>Fecha</th>
-              {codigosCompetencias.map(tipo => (
-                <th key={tipo} style={{ padding: '10px 10px', width: 80 }}>{tipo.toUpperCase()}</th>
-              ))}
-              {codigosEstilos.map(tipo => (
-                <th key={tipo} style={{ padding: '10px 10px', width: 80 }}>{tipo.toUpperCase()}</th>
-              ))}
+              {todasAfirmaciones.map((a, i) => {
+                const rawLabel = a.codigo ? String(a.codigo) : `P${i + 1}`;
+                const label = rawLabel.replace(/\d+$/g, '');
+                return <th key={rawLabel} title={a.pregunta} style={{ padding: '10px 8px', minWidth: 120, textAlign: 'center', whiteSpace: 'normal' }}>{label}</th>;
+              })}
             </tr>
           </thead>
           <tbody>
-            {allResponses.map((resp, idx) => (
-              <tr key={resp.id || idx} style={{ borderBottom: '1px solid #ededed' }}>
-                <td style={{ padding: '10px 10px', width: 80 }}>{resp.evaluadoCodigo}</td>
-                <td style={{ padding: '10px 10px', width: 160 }}>{resp.evaluadoNombre}</td>
-                <td style={{ padding: '10px 10px', width: 120 }}>{resp.evaluatorName}</td>
-                <td style={{ padding: '10px 10px', width: 100 }}>{resp.createdAt ? new Date(resp.createdAt).toLocaleDateString() : ''}</td>
-                {codigosCompetencias.map(tipo => {
-                  const afirmList = competenciasAgrupadas[tipo];
-                  const values = afirmList
-                    .map(a => {
-                      if (a.codigo && resp.responses?.[a.codigo]) {
-                        const val = mapLabelToNumeric(resp.responses[a.codigo]);
-                        return typeof val === 'number' && !isNaN(val) ? val : null;
-                      }
-                      return null;
-                    })
-                    .filter((v): v is number => v !== null);
-                  const avg = values.length > 0 ? (values.reduce((s, v) => s + v, 0) / values.length).toFixed(2) : '';
-                  return (
-                    <td key={tipo} style={{ padding: '10px 10px', width: 80, textAlign: 'center', fontWeight: 700 }}>{avg}</td>
-                  );
-                })}
-                {codigosEstilos.map(tipo => {
-                  const afirmList = estilosAgrupados[tipo];
-                  const values = afirmList
-                    .map(a => {
-                      if (a.codigo && resp.responses?.[a.codigo]) {
-                        const val = mapLabelToNumeric(resp.responses[a.codigo]);
-                        return typeof val === 'number' && !isNaN(val) ? val : null;
-                      }
-                      return null;
-                    })
-                    .filter((v): v is number => v !== null);
-                  const avg = values.length > 0 ? (values.reduce((s, v) => s + v, 0) / values.length).toFixed(2) : '';
-                  return (
-                    <td key={tipo} style={{ padding: '10px 10px', width: 80, textAlign: 'center', fontWeight: 700 }}>{avg}</td>
-                  );
-                })}
+            {allResponses.length === 0 ? (
+              <tr>
+                <td colSpan={4 + todasAfirmaciones.length} style={{ padding: 20, textAlign: 'center', color: '#666' }}>No hay respuestas registradas aún.</td>
               </tr>
-            ))}
+            ) : (
+              allResponses.map((resp, idx) => (
+                <tr key={resp.id || idx} style={{ borderBottom: '1px solid #ededed' }}>
+                  <td style={{ padding: '10px 10px', width: 80 }}>{resp.evaluadoCodigo}</td>
+                  <td style={{ padding: '10px 10px', width: 160 }}>{resp.evaluadoNombre}</td>
+                  <td style={{ padding: '10px 10px', width: 120 }}>{resp.evaluatorName}</td>
+                  <td style={{ padding: '10px 10px', width: 100 }}>{resp.createdAt ? new Date(resp.createdAt).toLocaleDateString() : ''}</td>
+                  {todasAfirmaciones.map(a => {
+                    const code = a.codigo || '';
+                    const raw = resp.responses?.[code] || '';
+                    const mapped = mapLabelToNumeric(raw as string);
+                    const display = raw && typeof mapped === 'number' && !isNaN(mapped) ? `${raw} (${mapped})` : raw;
+                    return <td key={code} style={{ padding: '8px 10px', minWidth: 120, textAlign: 'center' }}>{display}</td>;
+                  })}
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>

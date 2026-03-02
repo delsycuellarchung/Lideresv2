@@ -156,7 +156,7 @@ export default function GestionPage() {
   return (
     <div style={{ padding: 28 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h2 style={{ margin: 0, marginBottom: 0, fontSize: 32, fontWeight: 800 }}>Gestiones</h2>
+        <h2 style={{ margin: '-173px 0 0 0', marginBottom: 0, fontSize: 32, fontWeight: 800 }}>GESTIONES</h2>
         <button
           onClick={() => setShowModal(true)}
           style={{

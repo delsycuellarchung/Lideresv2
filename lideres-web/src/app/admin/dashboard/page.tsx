@@ -76,7 +76,7 @@ export default function DashboardPage() {
 
   return (
     <section className="dashboard-container">
-      <h2 style={{ margin: 0, marginBottom: 24, fontSize: 32, fontWeight: 800, textTransform: 'uppercase', transform: 'translateX(-16px) translateY(-60px)' }}>DASHBOARD</h2>
+      <h2 style={{ margin: 0, marginBottom: 24, fontSize: 32, fontWeight: 800, transform: 'translateX(-16px) translateY(-60px)' }}>Dashboard</h2>
 
       <div className="stat-grid">
         <div className="stat-card stat-evaluadores" role="button" aria-label="Evaluadores">

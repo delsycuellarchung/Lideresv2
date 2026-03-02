@@ -159,6 +159,26 @@ export default function FormularioPublicPage() {
         console.warn('Aviso: Error actualizando Supabase:', e);
       }
 
+      // Además, intentar insertar cada envío en `form_responses` (no destructivo)
+      try {
+        await fetch('/api/insert-response', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            token,
+            evaluatorName,
+            evaluadoNombre,
+            evaluadoCodigo,
+            responses
+          })
+        }).then(res => res.json()).then((r) => {
+          if (r && r.error) console.warn('Aviso: insert-response API retornó error:', r.error);
+          else console.log('✅ Insert-response API result:', r);
+        }).catch(err => console.warn('Aviso: error calling insert-response API', err));
+      } catch (e) {
+        console.warn('Aviso: Error llamando a insert-response API', e);
+      }
+
       // Limpiar respuestas guardadas y resetear formulario después de envío exitoso
       localStorage.removeItem(`form_responses_${token}`);
       setResponses({});
@@ -179,7 +199,7 @@ export default function FormularioPublicPage() {
         <div style={{ background: '#f8f9ff', borderRadius: 12, boxShadow: '0 8px 32px rgba(2, 6, 23, 0.06)', padding: '28px', border: '1px solid rgba(79, 70, 229, 0.1)' }}>
           {/* Header */}
           <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid rgba(239, 68, 68, 0.2)' }}>
-            <h1 style={{ fontSize: 32, fontWeight: 700, color: '#0F172A', margin: '0 0 6px 0', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Formulario de Evaluación</h1>
+            <h1 style={{ fontSize: 32, fontWeight: 700, color: '#0F172A', margin: '0 0 6px 0', letterSpacing: '0.5px' }}>Formulario de evaluación</h1>
             <p style={{ fontSize: 14, color: '#64748b', margin: 0, fontWeight: 500 }}>Evaluado: <span style={{ color: '#0F172A', fontWeight: 700 }}>{evaluatorName || 'Nombre no disponible'}</span></p>
           </div>
 

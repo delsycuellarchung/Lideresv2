@@ -1,6 +1,8 @@
 "use client";
 
 import React from "react";
+import dynamic from 'next/dynamic';
+const DraggableModal = dynamic(() => import('@/components/DraggableModal'), { ssr: false });
 
 export default function CompetenciasPage() {
   const [items, setItems] = React.useState<string[]>([]);
@@ -11,7 +13,15 @@ export default function CompetenciasPage() {
   React.useEffect(() => {
     try {
       const raw = localStorage.getItem('formulario_competencias');
-      if (raw) setItems(JSON.parse(raw));
+      if (raw) {
+        const parsed = JSON.parse(raw) || [];
+        const normalized = (parsed || []).map((it: any) => {
+          if (typeof it === 'string') return it;
+          if (it && typeof it === 'object') return String(it.nombre ?? it.codigo ?? it.label ?? JSON.stringify(it));
+          return String(it ?? '');
+        });
+        setItems(normalized);
+      }
     } catch (e) { console.warn(e); }
   }, []);
 
@@ -52,9 +62,9 @@ export default function CompetenciasPage() {
 
   return (
     <div style={{ padding: 28 }}>
-      <h2 style={{ margin: "-95px 0 16px 0", fontSize: 28, fontWeight: 800 }}>COMPETENCIAS</h2>
+      <h2 style={{ margin: "-85px 0 16px 0", fontSize: 28, fontWeight: 800 }}>COMPETENCIAS</h2>
       <div style={{ maxWidth: 980 }}>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginTop: '24px' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginTop: '38px', transform: 'translate(220px, 8px)' }}>
           <div>
             <button className="btn-press icon-btn" onClick={openCreate} style={{ padding: '10px 16px', fontSize: '15px' }}>
               <img src="/images/agregar.png" alt="Agregar" style={{ width: 18, height: 18, marginRight: 8 }} />Añadir
@@ -66,7 +76,7 @@ export default function CompetenciasPage() {
           {items.length ? items.map((it, i) => (
             <li key={i} style={{ padding: '12px 16px', borderBottom: '1px solid rgba(15,23,42,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
               <span style={{ fontSize: '15px', fontWeight: 500 }}>{it}</span>
-              <span style={{ display: 'inline-flex', gap: 10 }}>
+              <span style={{ display: 'inline-flex', gap: 10, flexShrink: 0, transform: 'translateX(230px)', alignSelf: 'center' }}>
                 <button 
                   onClick={() => openEdit(i)} 
                   aria-label={`Editar ${it}`}
@@ -146,20 +156,18 @@ export default function CompetenciasPage() {
       </div>
 
       {open && (
-        <div className="modal-overlay">
-          <div className="modal" role="dialog" aria-modal="true">
-            <h3>{editIndex === null ? 'Crear competencia' : 'Editar competencia'}</h3>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre" className="form-control" />
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
-              <button className="continue-btn icon-btn" onClick={() => { setOpen(false); setEditIndex(null); setName(""); }}>
-                <img src="/images/cancelar.png" alt="Cancelar" style={{ width: 18, height: 18, marginRight: 8 }} />Cancelar
-              </button>
-              <button className="btn-press icon-btn" onClick={save} disabled={!name.trim()}>
-                <img src="/images/guardar.png" alt="Guardar" style={{ width: 18, height: 18, marginRight: 8 }} />Guardar
-              </button>
-            </div>
-          </div>
+        <DraggableModal id="modal-competencias" isOpen={open} onClose={() => { setOpen(false); setEditIndex(null); setName(""); }} minWidth={520} minHeight={160} overlayClassName="modal-overlay" modalClassName="modal" centerOnOpen={true}>
+        <h3>{editIndex === null ? 'Crear competencia' : 'Editar competencia'}</h3>
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre" className="form-control" />
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+          <button className="continue-btn icon-btn" onClick={() => { setOpen(false); setEditIndex(null); setName(""); }}>
+            <img src="/images/cancelar.png" alt="Cancelar" style={{ width: 18, height: 18, marginRight: 8 }} />Cancelar
+          </button>
+          <button className="btn-press icon-btn" onClick={save} disabled={!name.trim()}>
+            <img src="/images/guardar.png" alt="Guardar" style={{ width: 18, height: 18, marginRight: 8 }} />Guardar
+          </button>
         </div>
+        </DraggableModal>
       )}
     </div>
   );

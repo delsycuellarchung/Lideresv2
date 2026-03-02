@@ -47,6 +47,7 @@ export default function DatosImportadosPage() {
   const [evaluadores, setEvaluadores] = useState<Persona[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchText, setSearchText] = useState('');
+  const [submissionStatus, setSubmissionStatus] = useState<Record<string, string>>({});
   const disableDb = String(process.env.NEXT_PUBLIC_DISABLE_DB || '').toLowerCase() === 'true';
   
   useEffect(() => {
@@ -75,41 +76,56 @@ export default function DatosImportadosPage() {
         const localEvaluados: Persona[] = [];
         const localEvaluadores: Persona[] = [];
         rows.forEach((row, idx) => {
-          let tipo = 'evaluado';
-          let codigo = getFirstValue(row, ['Código del Evaluado', 'Codigo del Evaluado', 'codigo']);
-          let nombre = getFirstValue(row, ['Nombre del Evaluado', 'Nombre', 'nombre']);
-          let cargo = getFirstValue(row, ['Cargo del Evaluado', 'Cargo', 'cargo']);
-          let correo = getFirstValue(row, ['Correo del Evaluado', 'Correo', 'correo', 'Email', 'email']);
-          let area = getFirstValue(row, ['Área del Evaluado', 'Area del Evaluado', 'Area', 'area']);
-          let gerencia = getFirstValue(row, ['Gerencia del Evaluado', 'Gerencia', 'gerencia']);
-          let regional = null;
+          // Extract evaluado fields (prefer explicit evaluated keys)
+          const eval_codigo = getFirstValue(row, ['Código del Evaluado', 'Codigo del Evaluado']);
+          const eval_nombre = getFirstValue(row, ['Nombre del Evaluado']);
+          const eval_cargo = getFirstValue(row, ['Cargo del Evaluado']);
+          const eval_correo = getFirstValue(row, ['Correo del Evaluado']);
+          const eval_area = getFirstValue(row, ['Área del Evaluado', 'Area del Evaluado']);
+          const eval_gerencia = getFirstValue(row, ['Gerencia del Evaluado']);
+          const eval_regional = getFirstValue(row, ['Regional del Evaluado', 'Regional Evaluado', 'Regional', 'regional']);
 
-          if (!codigo) {
-            tipo = 'evaluador';
-            codigo = getFirstValue(row, ['Código del Evaluador', 'Codigo del Evaluador', 'codigo']);
-            nombre = getFirstValue(row, ['Nombre del Evaluador', 'Nombre', 'nombre']);
-            cargo = getFirstValue(row, ['Cargo del Evaluador', 'Cargo', 'cargo']);
-            correo = getFirstValue(row, ['Correo del Evaluador', 'Correo', 'correo', 'Email', 'email']);
-            area = getFirstValue(row, ['Área del Evaluador', 'Area del Evaluador', 'Area', 'area']);
-            gerencia = getFirstValue(row, ['Gerencia del Evaluador', 'Gerencia', 'gerencia']);
-            regional = getFirstValue(row, ['Regional del Evaluador', 'Regional Evaluador', 'regional']);
+          if (eval_codigo || eval_nombre) {
+            localEvaluados.push({
+              id: `evaluado-local-${idx}`,
+              codigo: String(eval_codigo || ''),
+              nombre: String(eval_nombre || ''),
+              cargo: eval_cargo || null,
+              correo: eval_correo || null,
+              area_nombre: eval_area ? String(eval_area) : null,
+              gerencia_nombre: eval_gerencia ? String(eval_gerencia) : null,
+              regional: eval_regional || null,
+              tipo: 'evaluado',
+            });
           }
 
-          if (!codigo || !nombre) return;
+          // Extract evaluador fields (prefer explicit evaluator keys)
+          const ev_codigo = getFirstValue(row, ['Código del Evaluador', 'Codigo del Evaluador']);
+          const ev_nombre = getFirstValue(row, ['Nombre del Evaluador']);
+          const ev_cargo = getFirstValue(row, ['Cargo del Evaluador']);
+          const ev_correo = getFirstValue(row, ['Correo del Evaluador', 'Correo', 'correo', 'Email', 'email']);
+          const ev_area = getFirstValue(row, ['Área del Evaluador', 'Area del Evaluador']);
+          const ev_gerencia = getFirstValue(row, ['Gerencia del Evaluador']);
+          const ev_regional = getFirstValue(row, ['Regional del Evaluador', 'Regional Evaluador']);
 
-          const persona: Persona = {
-            id: String(idx),
-            codigo: String(codigo),
-            nombre: String(nombre),
-            cargo: cargo || null,
-            correo: correo || null,
-            area_nombre: area ? String(area) : null,
-            gerencia_nombre: gerencia ? String(gerencia) : null,
-            regional: regional || null,
-            tipo,
-          };
-          if (tipo === 'evaluado') localEvaluados.push(persona);
-          else localEvaluadores.push(persona);
+          if (ev_codigo || ev_nombre) {
+            localEvaluadores.push({
+              id: `evaluador-local-${idx}`,
+              codigo: String(ev_codigo || ''),
+              nombre: String(ev_nombre || ''),
+              cargo: ev_cargo || null,
+              correo: ev_correo || null,
+              area_nombre: ev_area ? String(ev_area) : null,
+              gerencia_nombre: ev_gerencia ? String(ev_gerencia) : null,
+              regional: ev_regional || null,
+              tipo: 'evaluador',
+              codigo_alt: eval_codigo || null,
+              nombre_alt: eval_nombre || null,
+              correo_alt: eval_correo || null,
+              area_alt: eval_area || null,
+              gerencia_alt: eval_gerencia || null,
+            });
+          }
         });
 
         setEvaluados(localEvaluados);
@@ -123,9 +139,6 @@ export default function DatosImportadosPage() {
       }
       return;
     }
-    
-    // Cargar evaluados y evaluadores desde la tabla 'evaluators'
-    // Intentar ordenar por `row_index` para respetar el orden de importación
     let evaluatorsData: any[] | null = null;
     let evalError: any = null;
     try {
@@ -157,7 +170,7 @@ export default function DatosImportadosPage() {
             correo: row.correo_evaluado || null,
             area_nombre: row.area_evaluado || null,
             gerencia_nombre: row.gerencia_evaluado || null,
-            regional: null,
+            regional: row.regional_evaluado || row['Regional del Evaluado'] || row['Regional Evaluado'] || row.regional || null,
             tipo: 'evaluado',
             codigo_alt: null,
             nombre_alt: null,
@@ -177,7 +190,7 @@ export default function DatosImportadosPage() {
             correo: row.correo_evaluador || null,
             area_nombre: row.area_evaluador || null,
             gerencia_nombre: row.gerencia_evaluador || null,
-            regional: row.regional_evaluador || null,
+            regional: row.regional_evaluador || row['Regional del Evaluador'] || row['Regional Evaluador'] || row.regional || null,
             tipo: 'evaluador',
             codigo_alt: row.codigo_evaluado || null,
             nombre_alt: row.nombre_evaluado || null,
@@ -190,6 +203,37 @@ export default function DatosImportadosPage() {
       
       setEvaluados(evaluados);
       setEvaluadores(evaluadores);
+
+      // Fetch submission statuses for evaluadores (by email or codigo) if DB available
+      try {
+        if (supabase && !disableDb) {
+          const emails = evaluadores.map(e => e.correo).filter(Boolean) as string[];
+          const codes = evaluadores.map(e => e.codigo).filter(Boolean) as string[];
+          const { data: subs } = await supabase
+            .from('form_submissions')
+            .select('evaluator_email,status')
+            .or(emails.map(em => `evaluator_email.eq.${em}`).join(','))
+            .limit(10000);
+          const map: Record<string,string> = {};
+          if (Array.isArray(subs)) {
+            subs.forEach((s: any) => {
+              const key = (s.evaluator_email || '').toLowerCase();
+              if (!key) return;
+              if (!map[key] || map[key] !== 'completed') {
+                map[key] = s.status || 'pending';
+              }
+            });
+          }
+          setSubmissionStatus(map);
+        } else {
+          // Local mode: mark all pending
+          const map: Record<string,string> = {};
+          evaluadores.forEach(e => { if (e.correo) map[e.correo.toLowerCase()] = 'pending'; });
+          setSubmissionStatus(map);
+        }
+      } catch (sErr) {
+        console.warn('Could not load submission statuses', sErr);
+      }
     }
     
     setLoading(false);
@@ -224,8 +268,22 @@ export default function DatosImportadosPage() {
   const filteredEvaluados = evaluados.filter(matchesSearch);
   const filteredEvaluadores = evaluadores.filter(matchesSearch);
 
+  const getStatusBadge = (status: string) => {
+    const colors: Record<string, { bg: string; text: string }> = {
+      pending: { bg: 'rgba(245, 158, 11, 0.08)', text: '#F59E0B' },
+      completed: { bg: 'rgba(34, 197, 94, 0.08)', text: '#16A34A' },
+    };
+    const color = colors[status] || colors.pending;
+    const label = status === 'completed' ? 'Completado' : 'Pendiente';
+    return (
+      <span style={{ padding: '6px 12px', borderRadius: 6, fontWeight: 600, fontSize: 12, background: color.bg, color: color.text }}>
+        {label}
+      </span>
+    );
+  };
+
   return (
-    <div style={{ padding: 28, transform: 'translateY(-32px)' }}>
+    <div style={{ padding: 28, transform: 'translateY(-20px)' }}>
       <div className="page-header" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0 }}>
         <h2 style={{ margin: '0 0 0 28px', fontSize: 32, fontWeight: 800, transform: 'translateY(-70px)' }}>DATOS IMPORTADOS</h2>
 
@@ -300,18 +358,19 @@ export default function DatosImportadosPage() {
               <th>Correo del Evaluado</th>
               <th>Área del Evaluado</th>
               <th>Gerencia del Evaluado</th>
+              <th>Regional del Evaluado</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6} style={{ padding: 12, textAlign: 'center' }}>
+                <td colSpan={7} style={{ padding: 12, textAlign: 'center' }}>
                   Cargando...
                 </td>
               </tr>
             ) : filteredEvaluados.length === 0 ? (
               <tr>
-                <td colSpan={6} style={{ padding: 12, color: "rgba(15,23,42,0.6)" }}>
+                <td colSpan={7} style={{ padding: 12, color: "rgba(15,23,42,0.6)" }}>
                   {searchTokens.length > 0 ? 'No hay resultados.' : 'No hay datos importados.'}
                 </td>
               </tr>
@@ -324,6 +383,7 @@ export default function DatosImportadosPage() {
                   <td>{evaluado.correo || '-'}</td>
                   <td>{evaluado.area_nombre || '-'}</td>
                   <td>{evaluado.gerencia_nombre || '-'}</td>
+                  <td>{evaluado.regional || '-'}</td>
                 </tr>
               ))
             )}
@@ -383,11 +443,36 @@ export default function DatosImportadosPage() {
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td colSpan={6} style={{ padding: 12, color: "rgba(15,23,42,0.6)" }}>
-                No hay evaluaciones importadas.
-              </td>
-            </tr>
+            {loading ? (
+              <tr>
+                <td colSpan={6} style={{ padding: 12, textAlign: 'center' }}>
+                  Cargando...
+                </td>
+              </tr>
+            ) : filteredEvaluadores.length === 0 ? (
+              <tr>
+                <td colSpan={6} style={{ padding: 12, color: "rgba(15,23,42,0.6)" }}>
+                  No hay evaluadores importados.
+                </td>
+              </tr>
+            ) : (
+              filteredEvaluadores.map((ev) => {
+                const status = submissionStatus[(ev.correo || '').toLowerCase()] || 'pending';
+                const nameParts = (ev.nombre || '').split(' ');
+                const firstName = nameParts.slice(0, 1).join(' ');
+                const lastName = nameParts.slice(1).join(' ');
+                return (
+                  <tr key={`eval-${ev.id}`}>
+                    <td>{ev.codigo}</td>
+                    <td>{firstName}</td>
+                    <td>{lastName || '-'}</td>
+                    <td>{ev.area_nombre || '-'}</td>
+                    <td>{ev.correo || '-'}</td>
+                    <td>{getStatusBadge(status)}</td>
+                  </tr>
+                );
+              })
+            )}
           </tbody>
         </table>
       )}

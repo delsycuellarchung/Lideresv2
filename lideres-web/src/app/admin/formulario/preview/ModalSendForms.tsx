@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import DraggableModal from '@/components/DraggableModal';
 import { supabase } from '@/lib/supabaseClient';
 
 interface Evaluador {
@@ -248,12 +249,13 @@ export default function ModalSendForms({ isOpen, onClose, formData }: ModalSendF
   if (!isOpen) return null;
 
   return (
-    <div style={{
-      width: '100%',
-      padding: '40px 12px',
-      background: 'transparent'
-    }}>
-      <div style={{ maxWidth: '1200px', width: '100%', margin: '0 auto' }}>
+    <DraggableModal id="modal-sendforms" isOpen={isOpen} onClose={onClose} minWidth={700} minHeight={420}>
+      <div style={{
+        width: '100%',
+        padding: '24px 18px',
+        background: 'transparent'
+      }}>
+        <div style={{ maxWidth: '1200px', width: '100%', margin: '0 auto' }}>
         <style>{`
           .deselect-btn {
             transition: transform .16s ease, box-shadow .16s ease, opacity .16s ease, background .12s ease;
@@ -450,5 +452,6 @@ export default function ModalSendForms({ isOpen, onClose, formData }: ModalSendF
         </div>
       </div>
     </div>
+    </DraggableModal>
   );
 }

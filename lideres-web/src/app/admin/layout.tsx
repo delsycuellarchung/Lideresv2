@@ -24,6 +24,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     if (pathname?.startsWith("/admin/formulario")) setFormOpen(true);
     if (pathname?.startsWith("/admin/resultados")) setResultOpen(true);
   }, [pathname]);
+  const topbarMarginTop = -8;
   
   const handleLogout = async () => {
     localStorage.removeItem("adminAuth");
@@ -144,7 +145,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     <Link href="/admin/enviar-formulario" className={"menu-btn " + (pathname?.startsWith("/admin/enviar-formulario") ? "active" : "") } style={{ paddingLeft: 28 }} aria-current={pathname?.startsWith('/admin/enviar-formulario') ? 'page' : undefined} title="Enviar Formulario">
                       <span className="menu-label">Enviar Formulario</span>
                     </Link>
-                    <Link href="/admin/respuestas-formulario" className={"menu-btn " + (pathname?.startsWith("/admin/respuestas-formulario") ? "active" : "") } style={{ paddingLeft: 28 }} aria-current={pathname?.startsWith('/admin/respuestas-formulario') ? 'page' : undefined} title="Respuestas Formulario">
+                    <Link href="/admin/respuestas-formulario" className={"menu-btn " + (pathname?.startsWith("/admin/respuestas-formulario") ? "active" : "") } style={{ paddingLeft: 28, marginTop: -6 }} aria-current={pathname?.startsWith('/admin/respuestas-formulario') ? 'page' : undefined} title="Respuestas Formulario">
                       <span className="menu-label">Respuestas Formulario</span>
                     </Link>
                   </div>
@@ -213,8 +214,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             height: '100vh',
           }}
         >
-          <div className="admin-topbar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 12, padding: '8px 16px', marginBottom: 12 }}>
-            <div className="user-header" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div className="admin-topbar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 12, padding: '8px 16px', marginBottom: 12, marginTop: topbarMarginTop }}>
+            <div className="user-header" style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: -12 }}>
               <div style={{ fontWeight: 700, color: 'rgba(0,0,0,0.9)', paddingRight: 6 }}>Usuario</div>
               <button type="button" onClick={handleLogout} aria-label="Cerrar sesión" title="Cerrar sesión" className="user-logout-btn">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>

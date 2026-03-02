@@ -10,8 +10,8 @@ Copia `.env.local.example` a `.env.local` y configura tus credenciales de correo
 # Para Gmail (recomendado para pruebas):
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
-SMTP_USER=tu-email@gmail.com
-SMTP_PASS=tu-contraseña-app  # Generar en: https://myaccount.google.com/apppasswords
+SMTP_USER=noeliachung270@gmail.com
+SMTP_PASS=Chungnoelia251103@@  # Generar en: https://myaccount.google.com/apppasswords
 
 # Para otros proveedores (SendGrid, AWS SES, etc):
 SMTP_HOST=smtp.sendgrid.net

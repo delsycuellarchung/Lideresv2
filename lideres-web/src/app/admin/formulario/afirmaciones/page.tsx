@@ -3,6 +3,8 @@
 import React from "react";
 import { useRouter } from 'next/navigation';
 import ModalPreview from '../preview/ModalPreview';
+import dynamic from 'next/dynamic';
+const DraggableModal = dynamic(() => import('@/components/DraggableModal'), { ssr: false });
 
 type Afirmacion = {
   codigo?: string;
@@ -34,15 +36,34 @@ export default function AfirmacionesPage() {
   React.useEffect(() => {
     try {
       const raw = localStorage.getItem('formulario_afirmaciones');
-      if (raw) setItems(JSON.parse(raw));
+      if (raw) {
+        const parsed = JSON.parse(raw) || [];
+        const normalized = Array.isArray(parsed) ? parsed.map((a: any) => {
+          const item = typeof a === 'string' ? { pregunta: a } : (a || {});
+          const codigoVal = item.codigo != null ? (typeof item.codigo === 'object' ? (item.codigo.codigo ?? item.codigo.nombre ?? JSON.stringify(item.codigo)) : String(item.codigo)) : undefined;
+          const preguntaVal = item.pregunta != null ? (typeof item.pregunta === 'object' ? (item.pregunta.pregunta ?? item.pregunta.texto ?? JSON.stringify(item.pregunta)) : String(item.pregunta)) : '';
+          const tipoVal = item.tipo != null ? (typeof item.tipo === 'object' ? (item.tipo.nombre ?? JSON.stringify(item.tipo)) : String(item.tipo)) : undefined;
+          const categoriaVal = item.categoria != null ? String(item.categoria) : undefined;
+          return { codigo: codigoVal, pregunta: preguntaVal, tipo: tipoVal, categoria: categoriaVal };
+        }) : [];
+        setItems(normalized as Afirmacion[]);
+      }
     } catch (e) { console.warn(e); }
     try {
       const rawC = localStorage.getItem('formulario_competencias');
-      if (rawC) setAvailableCompetencias(JSON.parse(rawC));
+      if (rawC) {
+        const parsed = JSON.parse(rawC) || [];
+        const normalized = (parsed || []).map((it: any) => typeof it === 'string' ? it : (it && typeof it === 'object' ? String(it.nombre ?? it.codigo ?? it.label ?? JSON.stringify(it)) : String(it ?? '')));
+        setAvailableCompetencias(normalized);
+      }
     } catch (e) { console.warn(e); }
     try {
       const rawE = localStorage.getItem('formulario_estilos');
-      if (rawE) setAvailableEstilos(JSON.parse(rawE));
+      if (rawE) {
+        const parsed = JSON.parse(rawE) || [];
+        const normalized = (parsed || []).map((it: any) => typeof it === 'string' ? it : (it && typeof it === 'object' ? String(it.nombre ?? it.codigo ?? it.label ?? JSON.stringify(it)) : String(it ?? '')));
+        setAvailableEstilos(normalized);
+      }
     } catch (e) { console.warn(e); }
     try {
       const rawI = localStorage.getItem('formulario_instrucciones');
@@ -76,8 +97,16 @@ export default function AfirmacionesPage() {
       prefix = normalized.split(/\s+/).filter(Boolean).map(w => w[0]).join('').toUpperCase();
     }
     // count existing affirmations for this tipo (exact match)
-    const existing = items.filter(it => it.tipo === tipo).length;
-    setCodigo(`${prefix}${existing + 1}`);
+    const existingForTipo = (items || []).filter(it => String(it.tipo) === String(tipo));
+    let nextIndex = existingForTipo.length + 1;
+    // build candidate and ensure uniqueness
+    let candidate = `${prefix}${nextIndex}`;
+    const exists = (code: string) => (items || []).some(it => String(it.codigo || '') === String(code));
+    while (exists(candidate)) {
+      nextIndex += 1;
+      candidate = `${prefix}${nextIndex}`;
+    }
+    setCodigo(candidate);
   }, [tipo, items, codigo, availableCompetencias, availableEstilos]);
 
   const save = () => {
@@ -93,8 +122,23 @@ export default function AfirmacionesPage() {
       } else {
         prefix = normalized.split(/\s+/).filter(Boolean).map(w => w[0]).join('').toUpperCase();
       }
-      const existing = items.filter(it => it.tipo === tipo).length;
-      codeToUse = `${prefix}${existing + 1}`;
+      // Append numeric suffix based on existing affirmations for this tipo
+      const existingForTipo = (items || []).filter((it, idx) => {
+        // when editing, exclude the item being edited from the count
+        if (editingIndex !== null && idx === editingIndex) return false;
+        return String(it.tipo) === String(tipo);
+      });
+      let nextIndex = existingForTipo.length + 1;
+      let candidate = `${prefix}${nextIndex}`;
+      const exists = (code: string) => (items || []).some((it, idx) => {
+        if (editingIndex !== null && idx === editingIndex) return false;
+        return String(it.codigo || '') === String(code);
+      });
+      while (exists(candidate)) {
+        nextIndex += 1;
+        candidate = `${prefix}${nextIndex}`;
+      }
+      codeToUse = `${candidate}`;
     }
     const categoriaToUse = (tipoFuente as 'competencia' | 'estilo' | null) || (determineTipoCategory(tipo) as 'competencia' | 'estilo' | 'unknown');
     const entry: Afirmacion = { codigo: codeToUse || undefined, pregunta: pregunta.trim(), tipo: tipo || undefined, categoria: categoriaToUse || 'unknown' };
@@ -145,72 +189,69 @@ export default function AfirmacionesPage() {
 
   return (
     <div style={{ padding: 28 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
-        <h2 style={{ margin: "-32px 0 16px 0", fontSize: 28, fontWeight: 800 }}>AFIRMACIONES</h2>
-      </div>
-      <div style={{ maxWidth: 980 }}>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginTop: '-48px' }}>
-          <div>
-            <button className="btn-press icon-btn" onClick={() => { setEditingIndex(null); setCodigo(''); setPregunta(''); setTipo(null); setTipoFuente(null); setOpen(true); }} style={{ padding: '10px 16px', fontSize: '15px' }}>
-              <img src="/images/agregar.png" alt="Agregar" style={{ width: 18, height: 18, marginRight: 8 }} />Añadir
-            </button>
-            <button type="button" className="btn-press icon-btn" onClick={() => setShowPreviewModal(true)} style={{ marginLeft: 8, padding: '10px 16px', fontSize: '15px' }}>
-              <img src="/images/crearformulario.png" alt="Crear formulario" style={{ width: 18, height: 18, marginRight: 8 }} />Crear formulario
-            </button>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 20, marginBottom: 6 }}>
-          <div 
-            role="tablist" 
-            aria-label="Filtrar por tipo"
-            style={{ 
-              display: 'inline-flex', 
-              background: 'rgba(241, 245, 249, 0.8)',
-              borderRadius: '10px',
-              padding: '4px',
-              border: '1px solid rgba(15, 23, 42, 0.08)',
-              boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04) inset'
-            }}
-          >
-            <button 
-              onClick={() => { setFilterScope('competencia'); setFilterValue(null); }}
-              style={{
-                padding: '8px 20px',
-                borderRadius: '7px',
-                border: 'none',
-                background: filterScope === 'competencia' ? 'linear-gradient(180deg, #ffffff, #f8fafc)' : 'transparent',
-                color: filterScope === 'competencia' ? '#0f172a' : 'rgba(15, 23, 42, 0.6)',
-                fontWeight: filterScope === 'competencia' ? 600 : 500,
-                fontSize: '14px',
-                cursor: 'pointer',
-                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                boxShadow: filterScope === 'competencia' ? '0 2px 4px rgba(15, 23, 42, 0.1), 0 1px 2px rgba(15, 23, 42, 0.06)' : 'none',
-                transform: filterScope === 'competencia' ? 'translateY(-1px)' : 'translateY(0)'
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+          <h2 style={{ margin: "-160px 0 16px 0", fontSize: 28, fontWeight: 800 }}>AFIRMACIONES</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 13 }}>
+              <button className="btn-press icon-btn" onClick={() => { setEditingIndex(null); setCodigo(''); setPregunta(''); setTipo(null); setTipoFuente(null); setOpen(true); }} style={{ padding: '10px 16px', fontSize: '15px' }}>
+                <img src="/images/agregar.png" alt="Agregar" style={{ width: 18, height: 18, marginRight: 8 }} />Añadir
+              </button>
+              <button type="button" className="btn-press icon-btn" onClick={() => setShowPreviewModal(true)} style={{ padding: '10px 16px', fontSize: '15px' }}>
+                <img src="/images/crearformulario.png" alt="Crear formulario" style={{ width: 18, height: 18, marginRight: 8 }} />Crear formulario
+              </button>
+            </div>
+            <div 
+              role="tablist" 
+              aria-label="Filtrar por tipo"
+              style={{ 
+                display: 'inline-flex', 
+                background: 'rgba(241, 245, 249, 0.8)',
+                borderRadius: '10px',
+                padding: '4px',
+                border: '1px solid rgba(15, 23, 42, 0.08)',
+                boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04) inset'
               }}
             >
-              Competencias
-            </button>
-            <button 
-              onClick={() => { setFilterScope('estilo'); setFilterValue(null); }}
-              style={{
-                padding: '8px 20px',
-                borderRadius: '7px',
-                border: 'none',
-                background: filterScope === 'estilo' ? 'linear-gradient(180deg, #ffffff, #f8fafc)' : 'transparent',
-                color: filterScope === 'estilo' ? '#0f172a' : 'rgba(15, 23, 42, 0.6)',
-                fontWeight: filterScope === 'estilo' ? 600 : 500,
-                fontSize: '14px',
-                cursor: 'pointer',
-                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                boxShadow: filterScope === 'estilo' ? '0 2px 4px rgba(15, 23, 42, 0.1), 0 1px 2px rgba(15, 23, 42, 0.06)' : 'none',
-                transform: filterScope === 'estilo' ? 'translateY(-1px)' : 'translateY(0)'
-              }}
-            >
-              Estilos
-            </button>
+              <button 
+                onClick={() => { setFilterScope('competencia'); setFilterValue(null); }}
+                style={{
+                  padding: '8px 20px',
+                  borderRadius: '7px',
+                  border: 'none',
+                  background: filterScope === 'competencia' ? 'linear-gradient(180deg, #ffffff, #f8fafc)' : 'transparent',
+                  color: filterScope === 'competencia' ? '#0f172a' : 'rgba(15, 23, 42, 0.6)',
+                  fontWeight: filterScope === 'competencia' ? 600 : 500,
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                  boxShadow: filterScope === 'competencia' ? '0 2px 4px rgba(15, 23, 42, 0.1), 0 1px 2px rgba(15, 23, 42, 0.06)' : 'none',
+                  transform: filterScope === 'competencia' ? 'translateY(-1px)' : 'translateY(0)'
+                }}
+              >
+                Competencias
+              </button>
+              <button 
+                onClick={() => { setFilterScope('estilo'); setFilterValue(null); }}
+                style={{
+                  padding: '8px 20px',
+                  borderRadius: '7px',
+                  border: 'none',
+                  background: filterScope === 'estilo' ? 'linear-gradient(180deg, #ffffff, #f8fafc)' : 'transparent',
+                  color: filterScope === 'estilo' ? '#0f172a' : 'rgba(15, 23, 42, 0.6)',
+                  fontWeight: filterScope === 'estilo' ? 600 : 500,
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                  boxShadow: filterScope === 'estilo' ? '0 2px 4px rgba(15, 23, 42, 0.1), 0 1px 2px rgba(15, 23, 42, 0.06)' : 'none',
+                  transform: filterScope === 'estilo' ? 'translateY(-1px)' : 'translateY(0)'
+                }}
+              >
+                Estilos
+              </button>
+            </div>
           </div>
         </div>
+        <div style={{ maxWidth: '100%' }}>
 
         {/* Render filtered list */}
         <ul style={{ marginTop: 20, paddingLeft: 0, listStyle: 'none' }}>
@@ -322,42 +363,38 @@ export default function AfirmacionesPage() {
       </div>
 
       {open && (
-        <div className="modal-overlay">
-          <div className="modal" role="dialog" aria-modal="true">
-            <h3>Crear afirmación</h3>
-            <div style={{ marginTop: 8, display: 'grid', gap: 10, alignItems: 'start' }}>
-              <label style={{ fontSize: 13, fontWeight: 700 }}>Código:</label>
-              <input value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="(dejar vacío para autogenerar)" className="form-control" style={{ maxWidth: 520, height: 44 }} />
+        <DraggableModal id="modal-afirmaciones" isOpen={open} onClose={() => setOpen(false)} minWidth={680} minHeight={420} overlayClassName="modal-overlay" modalClassName="modal" centerOnOpen={true}>
+        <h3>Crear afirmación</h3>
+        <div style={{ marginTop: 8, display: 'grid', gap: 10, alignItems: 'start' }}>
+          <label style={{ fontSize: 13, fontWeight: 700 }}>Código:</label>
+          <input value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="(dejar vacío para autogenerar)" className="form-control" style={{ maxWidth: 640, height: 44 }} />
 
-              <label style={{ fontSize: 13, fontWeight: 700 }}>Texto de la Pregunta:</label>
-              <textarea value={pregunta} onChange={(e) => setPregunta(e.target.value)} placeholder="Escribe la pregunta" className="form-control form-control--textarea" style={{ maxWidth: 520 }} />
+          <label style={{ fontSize: 13, fontWeight: 700 }}>Texto de la Pregunta:</label>
+          <textarea value={pregunta} onChange={(e) => setPregunta(e.target.value)} placeholder="Escribe la pregunta" className="form-control form-control--textarea" style={{ maxWidth: 640, minHeight: 180 }} />
 
-              <label style={{ fontSize: 13, fontWeight: 700 }}>Tipo:</label>
-              <select value={tipoFuente ?? ""} onChange={(e) => { setTipoFuente(e.target.value || null); setTipo(null); }} className="form-control" style={{ maxWidth: 520 }}>
-                <option value="">-- Seleccionar tipo --</option>
-                <option value="competencia">Competencia</option>
-                <option value="estilo">Estilo</option>
-              </select>
+          <label style={{ fontSize: 13, fontWeight: 700 }}>Tipo:</label>
+          <select value={tipoFuente ?? ""} onChange={(e) => { setTipoFuente(e.target.value || null); setTipo(null); }} className="form-control" style={{ maxWidth: 640 }}>
+            <option value="">-- Seleccionar tipo --</option>
+            <option value="competencia">Competencia</option>
+            <option value="estilo">Estilo</option>
+          </select>
 
-              <label style={{ fontSize: 13, fontWeight: 700 }}>Seleccionar:</label>
-              <select value={tipo ?? ""} onChange={(e) => setTipo(e.target.value || null)} className="form-control" style={{ maxWidth: 520 }}>
-                <option value="">-- Seleccionar --</option>
-                {(tipoFuente === 'competencia' ? availableCompetencias : tipoFuente === 'estilo' ? availableEstilos : []).map((c, i) => <option key={i} value={c}>{c}</option>)}
-              </select>
-
-              
-            </div>
-
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
-              <button className="continue-btn icon-btn" onClick={() => setOpen(false)}>
-                <img src="/images/cancelar.png" alt="Cancelar" style={{ width: 18, height: 18, marginRight: 8 }} />Cancelar
-              </button>
-              <button className="btn-press icon-btn" onClick={save} disabled={!pregunta.trim()}>
-                <img src="/images/guardar.png" alt="Guardar" style={{ width: 18, height: 18, marginRight: 8 }} />Guardar
-              </button>
-            </div>
-          </div>
+          <label style={{ fontSize: 13, fontWeight: 700 }}>Seleccionar:</label>
+          <select value={tipo ?? ""} onChange={(e) => setTipo(e.target.value || null)} className="form-control" style={{ maxWidth: 640 }}>
+            <option value="">-- Seleccionar --</option>
+            {(tipoFuente === 'competencia' ? availableCompetencias : tipoFuente === 'estilo' ? availableEstilos : []).map((c, i) => <option key={i} value={c}>{c}</option>)}
+          </select>
         </div>
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+          <button className="continue-btn icon-btn" onClick={() => setOpen(false)}>
+            <img src="/images/cancelar.png" alt="Cancelar" style={{ width: 18, height: 18, marginRight: 8 }} />Cancelar
+          </button>
+          <button className="btn-press icon-btn" onClick={save} disabled={!pregunta.trim()}>
+            <img src="/images/guardar.png" alt="Guardar" style={{ width: 18, height: 18, marginRight: 8 }} />Guardar
+          </button>
+        </div>
+        </DraggableModal>
       )}
 
       <ModalPreview isOpen={showPreviewModal} onClose={() => setShowPreviewModal(false)} />

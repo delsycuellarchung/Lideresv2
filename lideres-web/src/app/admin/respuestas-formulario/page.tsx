@@ -88,7 +88,7 @@ export default function RespuestasFormularioPage() {
 
   return (
     <div style={{ padding: 28 }}>
-      <h2 style={{ margin: 0, marginBottom: 24, fontSize: 32, fontWeight: 800 }}>Respuestas del Formulario</h2>
+      <h2 style={{ margin: '-85px 0 24px 0', fontSize: 32, fontWeight: 800 }}>RESPUESTAS DEL FORMULARIO</h2>
 
       <div style={{ marginBottom: 24 }}>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -125,8 +125,10 @@ export default function RespuestasFormularioPage() {
             <thead>
               <tr style={{ background: 'rgba(15,23,42,0.02)', borderBottom: '2px solid rgba(15,23,42,0.1)' }}>
                 <th style={{ padding: 16, textAlign: 'left', fontWeight: 600, color: '#0F172A' }}>Evaluador</th>
-                <th style={{ padding: 16, textAlign: 'left', fontWeight: 600, color: '#0F172A' }}>Correo</th>
+                <th style={{ padding: 16, textAlign: 'left', fontWeight: 600, color: '#0F172A' }}>Correo destino</th>
+                <th style={{ padding: 16, textAlign: 'left', fontWeight: 600, color: '#0F172A' }}>Evaluado</th>
                 <th style={{ padding: 16, textAlign: 'left', fontWeight: 600, color: '#0F172A' }}>Estado</th>
+                <th style={{ padding: 16, textAlign: 'left', fontWeight: 600, color: '#0F172A' }}>Enviado</th>
                 <th style={{ padding: 16, textAlign: 'left', fontWeight: 600, color: '#0F172A' }}>Fecha Creación</th>
                 <th style={{ padding: 16, textAlign: 'left', fontWeight: 600, color: '#0F172A' }}>Completado</th>
               </tr>
@@ -135,8 +137,21 @@ export default function RespuestasFormularioPage() {
               {responses.map((response, index) => (
                 <tr key={response.id} style={{ borderBottom: '1px solid rgba(15,23,42,0.05)' }}>
                   <td style={{ padding: 16, color: '#0F172A', fontWeight: 500 }}>{response.evaluator_name}</td>
-                  <td style={{ padding: 16, color: 'rgba(15,23,42,0.65)', fontSize: 13 }}>{response.evaluator_email}</td>
+                  <td style={{ padding: 16, color: 'rgba(15,23,42,0.65)', fontSize: 13, display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span>{response.evaluator_email || '-'}</span>
+                    {((String(response.id || '').startsWith('test-')) || String(response.evaluator_email || '').includes('@ethereal.email')) && (
+                      <span style={{ marginLeft: 6, padding: '4px 8px', background: 'rgba(99,102,241,0.08)', color: '#4f46e5', borderRadius: 6, fontSize: 12, fontWeight: 700 }}>Prueba</span>
+                    )}
+                  </td>
+                  <td style={{ padding: 16, color: 'rgba(15,23,42,0.65)', fontSize: 13 }}>{response.responses?.evaluado_nombre || response.responses?.evaluado || response.evaluado_name || '-'}</td>
                   <td style={{ padding: 16 }}>{getStatusBadge(response.status)}</td>
+                  <td style={{ padding: 16 }}>
+                    {response.status === 'completed' ? (
+                      <span style={{ padding: '6px 12px', borderRadius: 6, background: 'rgba(34,197,94,0.08)', color: '#16A34A', fontWeight: 700 }}>Sí</span>
+                    ) : (
+                      <span style={{ padding: '6px 12px', borderRadius: 6, background: 'rgba(15,23,42,0.04)', color: '#374151', fontWeight: 700 }}>No</span>
+                    )}
+                  </td>
                   <td style={{ padding: 16, color: 'rgba(15,23,42,0.65)', fontSize: 13 }}>
                     {formatDate(response.created_at)}
                   </td>

@@ -36,13 +36,9 @@ export default function EnviarFormularioPage() {
       }
 
       const evaluatorsMap = new Map<string, any>();
-
-      // Cargar de la tabla 'evaluators' sin límite
-      // Intentar ordenar por `row_index` para preservar el orden de import
       let evalData: any[] | null = null;
       let evalError: any = null;
       try {
-        // aumento el límite para cargar todos los datos importados (siempre que la tabla no sea gigantesca)
         const res = await supabase
           .from('evaluators')
           .select('*')
@@ -64,8 +60,6 @@ export default function EnviarFormularioPage() {
           });
         });
       }
-
-      // Cargar de 'personas' también (para no perder datos)
       const { data: personasData, error: personasError } = await supabase
         .from('personas')
         .select('id, nombre, correo, codigo')
@@ -74,7 +68,6 @@ export default function EnviarFormularioPage() {
 
       if (!personasError && Array.isArray(personasData)) {
         personasData.forEach((p: any) => {
-          // Solo agregar si no está en evaluators (evitar duplicados)
           if (!evaluatorsMap.has(p.correo || p.id)) {
             evaluatorsMap.set(p.correo || p.id, {
               ...p,
@@ -206,7 +199,7 @@ export default function EnviarFormularioPage() {
           .deselect-btn:active { transform: translateY(-1px); }
         `}</style>
         <div style={{ marginBottom: 40 }}>
-          <h1 style={{ fontSize: 32, fontWeight: 800, color: '#0F172A', margin: '-32px 0 8px 0' }}>
+          <h1 style={{ fontSize: 32, fontWeight: 800, color: '#0F172A', margin: '-80px 0 8px 0' }}>
             ENVIAR FORMULARIO
           </h1>
         </div>
@@ -337,18 +330,7 @@ export default function EnviarFormularioPage() {
           </div>
         )}
 
-        {results && results.results && (
-          <div style={{ marginBottom: 24, padding: 16, background: 'rgba(15,23,42,0.02)', borderRadius: 8 }}>
-            <details style={{ cursor: 'pointer' }}>
-              <summary style={{ fontWeight: 600, color: '#0F172A', marginBottom: 12 }}>Ver detalles</summary>
-              {results.results.map((result: any, i: number) => (
-                <div key={i} style={{ padding: 8, fontSize: 13, color: result.success ? '#16A34A' : '#FF6B6B', borderBottom: '1px solid rgba(15,23,42,0.1)' }}>
-                  {result.success ? '✓' : '✗'} {result.evaluator}: {result.success ? 'Enviado' : result.error}
-                </div>
-              ))}
-            </details>
-          </div>
-        )}
+        {/* Results detail panel removed per request */}
       </div>
     </div>
   );

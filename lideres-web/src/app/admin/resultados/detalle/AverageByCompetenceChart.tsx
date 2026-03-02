@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { labelToPercent } from '../../../lib/scaleMapper';
+import { labelToPercent } from '@/lib/scaleMapper';
 
 type Afirm = { codigo?: string; pregunta: string; tipo?: string | null; categoria?: string };
 
@@ -13,7 +13,15 @@ export default function AverageByCompetenceChart({ onBarClick }: { onBarClick?: 
     setLoading(true);
     try {
       const rawAff = localStorage.getItem('formulario_afirmaciones') || '[]';
-      const afirmaciones: Afirm[] = JSON.parse(rawAff);
+      const parsedAff = JSON.parse(rawAff) || [];
+      const afirmaciones: Afirm[] = Array.isArray(parsedAff) ? parsedAff.map((a: any) => {
+        const item = typeof a === 'string' ? { pregunta: a } : (a || {});
+        const codigoVal = item.codigo != null ? (typeof item.codigo === 'object' ? (item.codigo.codigo ?? item.codigo.nombre ?? JSON.stringify(item.codigo)) : String(item.codigo)) : undefined;
+        const preguntaVal = item.pregunta != null ? (typeof item.pregunta === 'object' ? (item.pregunta.pregunta ?? item.pregunta.texto ?? JSON.stringify(item.pregunta)) : String(item.pregunta)) : '';
+        const tipoVal = item.tipo != null ? (typeof item.tipo === 'object' ? (item.tipo.nombre ?? JSON.stringify(item.tipo)) : String(item.tipo)) : undefined;
+        const categoriaVal = item.categoria != null ? String(item.categoria) : undefined;
+        return { codigo: codigoVal, pregunta: preguntaVal, tipo: tipoVal, categoria: categoriaVal };
+      }) : [];
       const rawInst = localStorage.getItem('formulario_instrucciones') || '[]';
       const instrucciones: Array<{ etiqueta: string; descripcion?: string }> = JSON.parse(rawInst);
       const rawResp = localStorage.getItem('form_responses') || '[]';
@@ -24,10 +32,6 @@ export default function AverageByCompetenceChart({ onBarClick }: { onBarClick?: 
         setLoading(false);
         return;
       }
-
-      // no-op: score mapping handled by labelToPercent which applies the 1-5 mapping when appropriate
-
-      // map codigo -> affirmation
       const byCodigo: Record<string, Afirm> = {};
       afirmaciones.forEach((a) => { if (a.codigo) byCodigo[a.codigo] = a; });
 

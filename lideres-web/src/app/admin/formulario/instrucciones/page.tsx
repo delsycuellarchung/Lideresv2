@@ -1,6 +1,8 @@
 "use client";
 
 import React from "react";
+import dynamic from 'next/dynamic';
+const DraggableModal = dynamic(() => import('@/components/DraggableModal'), { ssr: false });
 
 export default function InstruccionesPage() {
   const [items, setItems] = React.useState<{etiqueta:string, descripcion?:string}[]>([]);
@@ -58,9 +60,9 @@ export default function InstruccionesPage() {
 
   return (
     <div style={{ padding: 28 }}>
-      <h2 style={{ margin: "-32px 0 16px 0", fontSize: 28, fontWeight: 800 }}>INSTRUCCIONES</h2>
+      <h2 style={{ margin: "-90px 0 16px 0", fontSize: 28, fontWeight: 800 }}>INSTRUCCIONES</h2>
       <div style={{ maxWidth: 980 }}>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginTop: '-48px' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginTop: '38px', transform: 'translateX(220px)' }}>
           <div>
             <button className="btn-press icon-btn" onClick={openCreate} style={{ padding: '10px 16px', fontSize: '15px' }}>
               <img src="/images/agregar.png" alt="Agregar" style={{ width: 18, height: 18, marginRight: 8 }} />Añadir
@@ -68,15 +70,15 @@ export default function InstruccionesPage() {
           </div>
         </div>
 
-        <ul style={{ marginTop: 40, paddingLeft: 0, listStyle: 'none' }}>
+        <ul style={{ marginTop: 30, paddingLeft: 0, listStyle: 'none' }}>
           {items.length ? items.map((it, i) => (
             <li key={i} style={{ padding: '12px 0', borderBottom: '1px solid rgba(15,23,42,0.08)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24 }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 600, fontSize: '15px', marginBottom: it.descripcion ? 6 : 0 }}>{it.etiqueta}</div>
-                  {it.descripcion ? <div style={{ color: 'rgba(15,23,42,0.65)', fontSize: 14, lineHeight: 1.5 }}>{it.descripcion}</div> : null}
+                  {it.descripcion ? <div style={{ color: 'rgba(15,23,42,0.65)', fontSize: 12, lineHeight: 1.70, margin: 0 }}>{it.descripcion}</div> : null}
                 </div>
-                <span style={{ display: 'inline-flex', gap: 10, flexShrink: 0 }}>
+                <span style={{ display: 'inline-flex', gap: 15, flexShrink: 0, transform: 'translateX(220px)', alignSelf: 'center' }}>
                   <button 
                     onClick={() => openEdit(i)} 
                     aria-label={`Editar ${it.etiqueta}`}
@@ -157,21 +159,19 @@ export default function InstruccionesPage() {
       </div>
 
       {open && (
-        <div className="modal-overlay">
-          <div className="modal" role="dialog" aria-modal="true">
-            <h3>{editIndex === null ? 'Crear instrucción' : 'Editar instrucción'}</h3>
-            <input value={etiqueta} onChange={(e) => setEtiqueta(e.target.value)} placeholder="Etiqueta" className="form-control" />
-            <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Descripción (opcional)" className="form-control form-control--textarea" />
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
-              <button className="continue-btn icon-btn" onClick={() => { setOpen(false); setEditIndex(null); setEtiqueta(""); setDescripcion(""); }}>
-                <img src="/images/cancelar.png" alt="Cancelar" style={{ width: 18, height: 18, marginRight: 8 }} />Cancelar
-              </button>
-              <button className="btn-press icon-btn" onClick={save} disabled={!etiqueta.trim()}>
-                <img src="/images/guardar.png" alt="Guardar" style={{ width: 18, height: 18, marginRight: 8 }} />Guardar
-              </button>
-            </div>
-          </div>
+        <DraggableModal id="modal-instrucciones" isOpen={open} onClose={() => { setOpen(false); setEditIndex(null); setEtiqueta(""); setDescripcion(""); }} minWidth={560} minHeight={340} overlayClassName="modal-overlay" modalClassName="modal" centerOnOpen={true}>
+        <h3>{editIndex === null ? 'Crear instrucción' : 'Editar instrucción'}</h3>
+        <input value={etiqueta} onChange={(e) => setEtiqueta(e.target.value)} placeholder="Etiqueta" className="form-control" />
+        <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Descripción (opcional)" className="form-control form-control--textarea" style={{ minHeight: 110 }} />
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 20 }}>
+          <button className="continue-btn icon-btn" onClick={() => { setOpen(false); setEditIndex(null); setEtiqueta(""); setDescripcion(""); }}>
+            <img src="/images/cancelar.png" alt="Cancelar" style={{ width: 18, height: 18, marginRight: 8 }} />Cancelar
+          </button>
+          <button className="btn-press icon-btn" onClick={save} disabled={!etiqueta.trim()}>
+            <img src="/images/guardar.png" alt="Guardar" style={{ width: 18, height: 18, marginRight: 8 }} />Guardar
+          </button>
         </div>
+        </DraggableModal>
       )}
     </div>
   );
