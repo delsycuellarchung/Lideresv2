@@ -25,7 +25,7 @@ if (!evaluadoNombre) {
 console.log(`Buscando evaluadores en Supabase y enviando formularios para: ${evaluadoNombre}`);
 
 async function fetchPersonas() {
-  const url = `${SUPABASE_URL.replace(/\/+$/, '')}/rest/v1/personas?select=*`;
+  const url = `${SUPABASE_URL.replace(/\/+$, '')}/rest/v1/personas?select=*`;
   const res = await fetch(url, {
     headers: {
       apikey: SUPABASE_KEY,
@@ -61,7 +61,7 @@ function buildEvaluators(personas, evaluadoNombre) {
 }
 
 async function sendBatch(evaluators) {
-  const url = `${APP_URL.replace(/\/+$/, '')}/api/send-forms`;
+  const url = `${APP_URL.replace(/\/+$, '')}/api/send-forms`;
   const body = {
     evaluators,
     formData: {},

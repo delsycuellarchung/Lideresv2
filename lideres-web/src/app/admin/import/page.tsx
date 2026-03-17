@@ -18,6 +18,7 @@ export default function AdminImportPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [localPreview, setLocalPreview] = useState<RawRow[] | null>(null);
   const router = useRouter();
   const REQUIRED_HEADERS = [
     'Codigo del Evaluado',
@@ -59,6 +60,19 @@ export default function AdminImportPage() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
     } catch (e) {
       console.warn("could not persist imports", e);
+    }
+  };
+
+  const clearHistory = () => {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(LOCAL_IMPORT_DATA_KEY);
+      saveImports([]);
+      try { setLocalPreview(null); } catch {}
+      setSuccess('Historial de importaciones eliminado');
+    } catch (e) {
+      console.warn('Error clearing history', e);
+      setError('No se pudo eliminar el historial');
     }
   };
   const parseDelimited = (text: string, delimiter: string): RawRow[] => {
@@ -124,43 +138,79 @@ export default function AdminImportPage() {
     return rows;
   };
   const processRows = async (rows: RawRow[]) => {
+    // Keep a local preview but do not persist locally unless DB insert succeeds
+    try {
+      setLocalPreview(rows);
+    } catch {}
+
+    let batchId: string | undefined = undefined;
+    let savedToDb = false;
+
+    try {
+      batchId = `batch-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+      const transformedRows = rows.map((row: RawRow, idx: number) => ({
+        codigo_evaluado: row['Codigo del Evaluado'] || row['Código del Evaluado'] || row['Codigo Evaluado'] || null,
+        nombre_evaluado: row['Nombre del Evaluado'] || row['Nombre Evaluado'] || null,
+        cargo_evaluado: row['Cargo del Evaluado'] || row['Cargo Evaluado'] || null,
+        correo_evaluado: row['Correo del Evaluado'] || row['Correo Evaluado'] || row['Correo'] || row['Email'] || row['email'] || null,
+        area_evaluado: row['Área del Evaluado'] || row['Area del Evaluado'] || row['Area Evaluado'] || null,
+        gerencia_evaluado: row['Gerencia del Evaluado'] || row['Gerencia Evaluado'] || null,
+        regional_evaluado: row['Regional del Evaluado'] || row['Regional Evaluado'] || row['Regional'] || row['regional'] || null,
+        codigo_evaluador: row['Codigo del Evaluador'] || row['Código del Evaluador'] || row['Codigo Evaluador'] || null,
+        nombre_evaluador: row['Nombre Evaluador'] || row['Nombre del Evaluador'] || row['Nombre Evaluador'] || null,
+        cargo_evaluador: row['Cargo del Evaluador'] || row['Cargo Evaluador'] || null,
+        correo_evaluador: row['Correo del Evaluador'] || row['Correo Evaluador'] || row['Correo'] || row['Email'] || row['email'] || null,
+        area_evaluador: row['Área del Evaluador'] || row['Area del Evaluador'] || row['Area Evaluador'] || null,
+        gerencia_evaluador: row['Gerencia del Evaluador'] || row['Gerencia Evaluador'] || null,
+        regional_evaluador: row['Regional del Evaluador'] || row['Regional Evaluador'] || row['Regional'] || row['regional'] || null,
+        row_index: idx,
+        import_batch: batchId,
+      }));
+      try {
+        console.log('[IMPORT] First transformed row:', transformedRows[0]);
+        const res = await fetch('/api/import-save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rows: transformedRows }),
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          console.warn('/api/import-save error', json);
+          setError(json?.error || 'Error saving via server API');
+          savedToDb = false;
+        } else {
+          // show inserted count and any removed columns for debugging
+          const inserted = json?.inserted ?? json?.ok ? transformedRows.length : 0;
+          const removed = Array.isArray(json?.removedColumns) ? json.removedColumns : [];
+          if (removed.length > 0) {
+            setError(`Se eliminaron columnas no existentes en BD: ${removed.join(', ')}`);
+          }
+          setSuccess(`✓ Importados ${inserted} registros correctamente${removed.length > 0 ? ' (columnas eliminadas: ' + removed.join(', ') + ')' : ''}`);
+          savedToDb = true;
+        }
+      } catch (callErr) {
+        console.error('/api/import-save exception', callErr);
+        setError(`Error calling import-save API: ${callErr instanceof Error ? callErr.message : String(callErr)}`);
+        savedToDb = false;
+      }
+    } catch (supaErr) {
+      console.error('[SUPABASE] Exception:', supaErr);
+      setError(`Error de conexión con BD: ${supaErr instanceof Error ? supaErr.message : String(supaErr)}`);
+      savedToDb = false;
+    }
+
+    if (!savedToDb) {
+      // Do not persist local history or redirect when DB insert failed
+      return;
+    }
+
+    // Persist last-import locally and adminImports history after successful DB save
     try {
       localStorage.setItem(LOCAL_IMPORT_DATA_KEY, JSON.stringify({ rows, savedAt: new Date().toISOString() }));
     } catch (e) {
       console.warn('could not persist local import data', e);
     }
-    let batchId: string | undefined = undefined;
-    if (supabase) {
-      try {
-        batchId = `batch-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
-        const transformedRows = rows.map((row: RawRow, idx: number) => ({
-          codigo_evaluado: row['Codigo del Evaluado'] || row['Código del Evaluado'] || row['Codigo Evaluado'] || null,
-          nombre_evaluado: row['Nombre del Evaluado'] || row['Nombre Evaluado'] || null,
-          cargo_evaluado: row['Cargo del Evaluado'] || row['Cargo Evaluado'] || null,
-          correo_evaluado: row['Correo del Evaluado'] || row['Correo Evaluado'] || row['Correo'] || row['Email'] || row['email'] || null,
-          area_evaluado: row['Área del Evaluado'] || row['Area del Evaluado'] || row['Area Evaluado'] || null,
-          gerencia_evaluado: row['Gerencia del Evaluado'] || row['Gerencia Evaluado'] || null,
-          regional_evaluado: row['Regional del Evaluado'] || row['Regional Evaluado'] || row['Regional'] || row['regional'] || null,
-          codigo_evaluador: row['Codigo del Evaluador'] || row['Código del Evaluador'] || row['Codigo Evaluador'] || null,
-          nombre_evaluador: row['Nombre Evaluador'] || row['Nombre del Evaluador'] || row['Nombre Evaluador'] || null,
-          cargo_evaluador: row['Cargo del Evaluador'] || row['Cargo Evaluador'] || null,
-          correo_evaluador: row['Correo del Evaluador'] || row['Correo Evaluador'] || row['Correo'] || row['Email'] || row['email'] || null,
-          area_evaluador: row['Área del Evaluador'] || row['Area del Evaluador'] || row['Area Evaluador'] || null,
-          gerencia_evaluador: row['Gerencia del Evaluador'] || row['Gerencia Evaluador'] || null,
-          regional_evaluador: row['Regional del Evaluador'] || row['Regional Evaluador'] || row['Regional'] || row['regional'] || null,
-          row_index: idx,
-          import_batch: batchId,
-        }));
-        const { error: insertError } = await supabase.from('evaluators').insert(transformedRows);
-        if (insertError) {
-          console.warn('[SUPABASE] Error saving:', insertError);
-          setError(`Datos parseados pero error al guardar en BD: ${insertError.message}`);
-        }
-      } catch (supaErr) {
-        console.error('[SUPABASE] Exception:', supaErr);
-        setError(`Error de conexión con BD: ${supaErr instanceof Error ? supaErr.message : String(supaErr)}`);
-      }
-    }
+
     const rec = {
       id: typeof batchId !== 'undefined' ? batchId : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       fileName: `import-${new Date().toISOString().slice(0, 10)}`,
@@ -268,7 +318,8 @@ export default function AdminImportPage() {
   };
   return (
     <section>
-      <h2 style={{ margin: '0 0 24px 24px', fontSize: 32, fontWeight: 800, transform: 'translateY(-62px)' }}>IMPORTAR DATOS</h2>
+      <h2 style={{ margin: '0 0 24px 24px', fontSize: 32, fontWeight: 800, transform: 'translateY(-62px)' }}>IMPORTAR DATOS
+</h2>
       <div style={{ marginLeft: 24, maxWidth: 1150 }}>
           <div style={{ marginBottom: 20, maxWidth: 1200 }}>
           <div style={{ flex: 1 }}>
@@ -331,9 +382,18 @@ export default function AdminImportPage() {
           </div>
         )}
         <div style={{ marginTop: 32 }}>
-          <h3 style={{ margin: '0 0 12px 0', fontSize: 16, fontWeight: 600 }}>
-            Importaciones Recientes:
-          </h3>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <h3 style={{ margin: '0 0 12px 0', fontSize: 16, fontWeight: 600 }}>
+              Importaciones Recientes:
+            </h3>
+            <div>
+              <button
+                onClick={clearHistory}
+                className="btn-press"
+                style={{ padding: '6px 10px', borderRadius: 8, fontSize: 13 }}
+              >Borrar historial</button>
+            </div>
+          </div>
           {imports.length === 0 ? (
             <p style={{ color: '#666' }}>No hay importaciones registradas</p>
           ) : (

@@ -75,7 +75,7 @@ if (pairs.length === 0) {
 console.log(`Preparados ${pairs.length} pares para envío. Enviando en lotes de ${batchSize}...`);
 
 async function sendBatch(batch) {
-  const url = `${APP_URL.replace(/\/+$/, '')}/api/send-forms`;
+  const url = `${APP_URL.replace(/\/+$, '')}/api/send-forms`;
   const evaluators = batch.map(p => ({
     correo: p.correo,
     nombre_evaluador: p.nombre_evaluador,

@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import fs from 'fs';
 import path from 'path';
 import { supabase } from '../../lib/supabaseClient';
+import { createClient } from '@supabase/supabase-js';
 
 const FILE_PATH = path.join(process.cwd(), 'uploads-debug', 'formulario.json');
 
@@ -15,10 +16,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     ensureDir();
 
     if (req.method === 'GET') {
-      // Try DB first when available
-      if (supabase) {
+      // Require authenticated user for reads
+      const { getUserFromAuthHeader } = await import('../../lib/serverAuth');
+      const { user, error: authErr } = await getUserFromAuthHeader(req as any);
+      if (authErr) return res.status(401).json({ error: 'Unauthorized: ' + authErr });
+
+      // Use service role client for DB reads (bypasses RLS)
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_SUPABASE_SERVICE_ROLE_KEY;
+      if (supabaseUrl && serviceKey) {
         try {
-          const { data, error } = await supabase
+          const client = createClient(supabaseUrl, serviceKey);
+          const { data, error } = await client
             .from('formulario')
             .select('content, saved_at')
             .order('saved_at', { ascending: false })
@@ -39,6 +48,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (req.method === 'POST') {
+      const { getUserFromAuthHeader } = await import('../../lib/serverAuth');
+      const { user, error: authErr } = await getUserFromAuthHeader(req as any);
+      if (authErr) return res.status(401).json({ error: 'Unauthorized: ' + authErr });
+      const authUserId = (user as any).id || null;
+
       const body = req.body || {};
       const toSave = {
         afirmaciones: Array.isArray(body.afirmaciones) ? body.afirmaciones : [],
@@ -48,10 +62,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         savedAt: new Date().toISOString(),
       };
 
-      // Try saving to DB when available
-      if (supabase) {
+      // Try saving to DB using service role when available
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_SUPABASE_SERVICE_ROLE_KEY;
+      if (supabaseUrl && serviceKey) {
         try {
-          const { error } = await supabase.from('formulario').insert([{ content: toSave, saved_at: toSave.savedAt }]);
+          const client = createClient(supabaseUrl, serviceKey);
+          const { error } = await client.from('formulario').insert([{ content: toSave, saved_at: toSave.savedAt, created_by: authUserId }]);
           if (!error) return res.status(200).json({ ok: true });
           console.warn('/api/formulario POST supabase insert error', error);
         } catch (dbErr) {

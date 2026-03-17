@@ -1,0 +1,20 @@
+{
+  "afirmaciones": [
+    {
+      "codigo": "CYD1",
+      "pregunta": "Explica las tareas y objetivos con claridad, asegurándose de que he comprendido",
+      "tipo": "COMUNICACIÓN Y DIRECCION",
+      "categoria": "competencia"
+    }
+  ],
+  "competencias": [
+    "COMUNICACIÓN Y DIRECCION",
+    "RESPETO Y CONFIANZA"
+  ],
+  "estilos": [
+    "AUTOCRÁTICO",
+    "COERCITIVO"
+  ],
+  "instrucciones": [],
+  "savedAt": "2026-03-02T17:30:56.574Z"
+}

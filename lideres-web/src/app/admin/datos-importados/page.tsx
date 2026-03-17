@@ -3,8 +3,10 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
+// Clave para intentar obtener datos importados desde localStorage
 const LOCAL_IMPORT_DATA_KEY = "local_import_data";
 
+// Tipo usado para representar tanto evaluadores como evaluados
 type Persona = {
   id: string;
   codigo: string;
@@ -15,7 +17,7 @@ type Persona = {
   gerencia_nombre: string | null;
   regional: string | null;
   tipo: string;
-  // Campos adicionales para sincronización
+  // Campos alternativos (por ejemplo, cuando la fila contiene datos mezclados)
   codigo_alt?: string | null;
   nombre_alt?: string | null;
   correo_alt?: string | null;
@@ -23,9 +25,12 @@ type Persona = {
   gerencia_alt?: string | null;
 };
 
+// Fila genérica recibida desde la importación (csv/hoja)
 type RawRow = Record<string, unknown>;
 type ImportLastResponse = { rows?: RawRow[] };
 
+// Helper: devuelve el primer valor no vacío entre una lista de keys
+// Útil para manejar cabeceras con variantes (acentos, mayúsculas, etc.).
 const getFirstValue = (row: RawRow, keys: string[]): string | null => {
   for (const key of keys) {
     const value = row[key];
@@ -35,118 +40,69 @@ const getFirstValue = (row: RawRow, keys: string[]): string | null => {
   return null;
 };
 
+// Normaliza cadenas para búsquedas: quita diacríticos y pasa a minúsculas.
 const normalizeText = (value: string) =>
   value
     .normalize('NFD')
     .replace(/\p{Diacritic}/gu, '')
     .toLowerCase();
 
+// Página principal que muestra los datos importados.
+// Funcionalidades principales:
+// - Cargar filas importadas desde `localStorage`, endpoint `/api/import-last` o Supabase
+// - Extraer listas de `evaluados` y `evaluadores`
+// - Buscar y filtrar por estado de envío (pendiente/completado)
 export default function DatosImportadosPage() {
+  // Tab activo: importados (evaluado), otra (evaluador) o evaluaciones
   const [tab, setTab] = useState<"importados" | "otra" | "evaluaciones">("importados");
   const [evaluados, setEvaluados] = useState<Persona[]>([]);
   const [evaluadores, setEvaluadores] = useState<Persona[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchText, setSearchText] = useState('');
   const [evalFilter, setEvalFilter] = useState<'all'|'pending'|'completed'>('all');
+  // Mapa email -> status ('pending' | 'completed') para mostrar en la pestaña Evaluaciones
   const [submissionStatus, setSubmissionStatus] = useState<Record<string, string>>({});
   const disableDb = String(process.env.NEXT_PUBLIC_DISABLE_DB || '').toLowerCase() === 'true';
   
+  // Cargar datos al montar el componente
   useEffect(() => {
     cargarDatos();
   }, []);
   
+  // Función que centraliza la carga de datos.
+  // Ahora FORZAMOS que los datos provengan únicamente de la base de datos.
+  // Si `supabase` no está disponible o `NEXT_PUBLIC_DISABLE_DB` está activo,
+  // la función devolverá listas vacías y registrará un error.
   const cargarDatos = async () => {
     setLoading(true);
 
-    if (!supabase || disableDb) {
-      try {
-        const raw = localStorage.getItem(LOCAL_IMPORT_DATA_KEY);
-        const payload = raw ? JSON.parse(raw) : null;
-        let rows: RawRow[] = payload?.rows || [];
-        if (rows.length === 0) {
-          try {
-            const res = await fetch('/api/import-last');
-            if (res.ok) {
-              const data = (await res.json()) as ImportLastResponse;
-              rows = Array.isArray(data?.rows) ? data.rows : [];
-            }
-          } catch (fetchErr) {
-            console.warn('No local import data from server', fetchErr);
-          }
-        }
-        const localEvaluados: Persona[] = [];
-        const localEvaluadores: Persona[] = [];
-        rows.forEach((row, idx) => {
-          // Extract evaluado fields (prefer explicit evaluated keys)
-          const eval_codigo = getFirstValue(row, ['Código del Evaluado', 'Codigo del Evaluado']);
-          const eval_nombre = getFirstValue(row, ['Nombre del Evaluado']);
-          const eval_cargo = getFirstValue(row, ['Cargo del Evaluado']);
-          const eval_correo = getFirstValue(row, ['Correo del Evaluado']);
-          const eval_area = getFirstValue(row, ['Área del Evaluado', 'Area del Evaluado']);
-          const eval_gerencia = getFirstValue(row, ['Gerencia del Evaluado']);
-          const eval_regional = getFirstValue(row, ['Regional del Evaluado', 'Regional Evaluado', 'Regional', 'regional']);
-
-          if (eval_codigo || eval_nombre) {
-            localEvaluados.push({
-              id: `evaluado-local-${idx}`,
-              codigo: String(eval_codigo || ''),
-              nombre: String(eval_nombre || ''),
-              cargo: eval_cargo || null,
-              correo: eval_correo || null,
-              area_nombre: eval_area ? String(eval_area) : null,
-              gerencia_nombre: eval_gerencia ? String(eval_gerencia) : null,
-              regional: eval_regional || null,
-              tipo: 'evaluado',
-            });
-          }
-
-          // Extract evaluador fields (prefer explicit evaluator keys)
-          const ev_codigo = getFirstValue(row, ['Código del Evaluador', 'Codigo del Evaluador']);
-          const ev_nombre = getFirstValue(row, ['Nombre del Evaluador']);
-          const ev_cargo = getFirstValue(row, ['Cargo del Evaluador']);
-          const ev_correo = getFirstValue(row, ['Correo del Evaluador', 'Correo', 'correo', 'Email', 'email']);
-          const ev_area = getFirstValue(row, ['Área del Evaluador', 'Area del Evaluador']);
-          const ev_gerencia = getFirstValue(row, ['Gerencia del Evaluador']);
-          const ev_regional = getFirstValue(row, ['Regional del Evaluador', 'Regional Evaluador']);
-
-          if (ev_codigo || ev_nombre) {
-            localEvaluadores.push({
-              id: `evaluador-local-${idx}`,
-              codigo: String(ev_codigo || ''),
-              nombre: String(ev_nombre || ''),
-              cargo: ev_cargo || null,
-              correo: ev_correo || null,
-              area_nombre: ev_area ? String(ev_area) : null,
-              gerencia_nombre: ev_gerencia ? String(ev_gerencia) : null,
-              regional: ev_regional || null,
-              tipo: 'evaluador',
-              codigo_alt: eval_codigo || null,
-              nombre_alt: eval_nombre || null,
-              correo_alt: eval_correo || null,
-              area_alt: eval_area || null,
-              gerencia_alt: eval_gerencia || null,
-            });
-          }
-        });
-
-        setEvaluados(localEvaluados);
-        setEvaluadores(localEvaluadores);
-      } catch (e) {
-        console.warn('Error cargando datos locales', e);
-        setEvaluados([]);
-        setEvaluadores([]);
-      } finally {
-        setLoading(false);
-      }
+    // Requerimos el cliente de Supabase y que no esté explícitamente deshabilitado
+    if (!supabase) {
+      console.error('Supabase client no disponible — Datos importados necesita la base de datos.');
+      setEvaluados([]);
+      setEvaluadores([]);
+      setLoading(false);
       return;
     }
+    if (disableDb) {
+      console.error('NEXT_PUBLIC_DISABLE_DB=true — Datos importados requiere la base de datos activa.');
+      setEvaluados([]);
+      setEvaluadores([]);
+      setLoading(false);
+      return;
+    }
+
+    // Camino con Supabase: consultar la tabla `evaluators` y convertirla
+    // a las estructuras que usa la UI.
     let evaluatorsData: any[] | null = null;
     let evalError: any = null;
     try {
+      // Intentamos ordenar por `row_index` si existe (mantener el orden de importación)
       const res = await supabase.from('evaluators').select('*').order('row_index', { ascending: true }).limit(10000);
       evaluatorsData = res.data as any[] | null;
       evalError = res.error;
     } catch (e) {
+      // Fallback: intentar sin ordenar
       const res2 = await supabase.from('evaluators').select('*').limit(10000);
       evaluatorsData = res2.data as any[] | null;
       evalError = res2.error;
@@ -161,7 +117,7 @@ export default function DatosImportadosPage() {
       const evaluadores: Persona[] = [];
       
       evaluatorsData.forEach((row: any, idx: number) => {
-        // Si tiene datos de evaluado, agregarlo a la lista
+        // Si la fila contiene datos de evaluado, los añadimos
         if (row.codigo_evaluado && row.nombre_evaluado) {
           evaluados.push({
             id: `evaluado-${idx}`,
@@ -181,7 +137,7 @@ export default function DatosImportadosPage() {
           });
         }
         
-        // Si tiene datos de evaluador, agregarlo a la lista
+        // Si la fila contiene datos de evaluador, los añadimos
         if (row.codigo_evaluador && row.nombre_evaluador) {
           evaluadores.push({
             id: `evaluador-${idx}`,
@@ -205,7 +161,7 @@ export default function DatosImportadosPage() {
       setEvaluados(evaluados);
       setEvaluadores(evaluadores);
 
-      // Fetch submission statuses for evaluadores (by email or codigo) if DB available
+      // Intentar cargar el estado de las respuestas (si la DB está disponible)
       try {
         if (supabase && !disableDb) {
           const emails = evaluadores.map(e => e.correo).filter(Boolean) as string[];
@@ -220,6 +176,7 @@ export default function DatosImportadosPage() {
             subs.forEach((s: any) => {
               const key = (s.evaluator_email || '').toLowerCase();
               if (!key) return;
+              // Priorizar 'completed' si existe
               if (!map[key] || map[key] !== 'completed') {
                 map[key] = s.status || 'pending';
               }
@@ -227,7 +184,7 @@ export default function DatosImportadosPage() {
           }
           setSubmissionStatus(map);
         } else {
-          // Local mode: mark all pending
+          // Si no hay DB, marcar todos como 'pending' por defecto
           const map: Record<string,string> = {};
           evaluadores.forEach(e => { if (e.correo) map[e.correo.toLowerCase()] = 'pending'; });
           setSubmissionStatus(map);
@@ -240,14 +197,16 @@ export default function DatosImportadosPage() {
     setLoading(false);
   };
 
+  // Preparar tokens de búsqueda normalizados
   const normalizedSearch = normalizeText(searchText.trim());
   const searchTokens = normalizedSearch.split(/\s+/).filter(Boolean);
 
+  // Función que verifica si una persona coincide con los tokens de búsqueda
   const matchesSearch = (persona: Persona) => {
     if (searchTokens.length === 0) return true;
-    // ignore status keywords when matching text fields
+    // Excluir tokens que expresan estado (pendiente/completado) para el filtro de texto
     const effectiveTokens = searchTokens.filter(t => !/pend|pendiente|pendientes|pending|comp|complet|completado|completed/.test(t));
-    if (effectiveTokens.length === 0) return true; // user only searched by status
+    if (effectiveTokens.length === 0) return true; 
     const nameParts = (persona.nombre || '').split(/\s+/).filter(Boolean);
     const correo = (persona.correo || '').toLowerCase();
     const correoLocal = correo.split('@')[0] || '';
@@ -267,7 +226,6 @@ export default function DatosImportadosPage() {
       persona.area_alt,
       persona.gerencia_alt,
       persona.tipo,
-      // include separated name parts and email fragments for better matching
       ...nameParts,
       correoLocal,
       correoDomain,
@@ -278,7 +236,7 @@ export default function DatosImportadosPage() {
     return effectiveTokens.every((token) => values.some((value) => value.includes(token)));
   };
 
-  // Detect if the user is searching for a status keyword like 'pendiente' or 'completado'
+  // Detectar token de estado en la búsqueda (pendiente/completado)
   const statusToken = searchTokens.find(t => /pend|pendiente|pendientes|pending|comp|complet|completado|completed/.test(t));
   const statusTokenDesired: 'pending' | 'completed' | null = statusToken
     ? (/comp|complet|completed/.test(statusToken) ? 'completed' : 'pending')
@@ -287,10 +245,10 @@ export default function DatosImportadosPage() {
   const filteredEvaluados = evaluados.filter(matchesSearch);
   const filteredEvaluadores = evaluadores.filter(matchesSearch);
 
+  // Si estamos en la pestaña 'evaluaciones' aplicamos filtros por estado
   const displayEvaluadores = tab === 'evaluaciones'
     ? filteredEvaluadores.filter((ev) => {
         const status = submissionStatus[(ev.correo || '').toLowerCase()] || 'pending';
-        // If user typed a status keyword in search, respect it first
         if (statusTokenDesired) {
           if (status !== statusTokenDesired) return false;
         }
@@ -299,6 +257,7 @@ export default function DatosImportadosPage() {
       })
     : filteredEvaluadores;
 
+  // Pequeño helper para renderizar la etiqueta de estado
   const getStatusBadge = (status: string) => {
     const colors: Record<string, { bg: string; text: string }> = {
       pending: { bg: 'rgba(245, 158, 11, 0.08)', text: '#F59E0B' },
@@ -313,6 +272,7 @@ export default function DatosImportadosPage() {
     );
   };
 
+  // Render: header con búsqueda, tabs y la tabla correspondiente según la pestaña activa
   return (
     <div style={{ padding: 28, transform: 'translateY(-20px)' }}>
       <div className="page-header" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0 }}>
@@ -364,8 +324,6 @@ export default function DatosImportadosPage() {
                 Evaluaciones
               </button>
             </div>
-
-            {/* Status filter shown only when Evaluaciones tab is active */}
             {tab === 'evaluaciones' && (
               <div style={{ display: 'flex', gap: 8, marginLeft: 12, alignItems: 'center' }}>
                 <button
@@ -391,7 +349,6 @@ export default function DatosImportadosPage() {
                 </button>
               </div>
             )}
-
             <button
               onClick={cargarDatos}
               className="btn-press"
@@ -404,8 +361,6 @@ export default function DatosImportadosPage() {
           </div>
         </div>
       </div>
-
-
       {tab === "importados" ? (
         <table className="import-table" aria-label="Tabla de datos importados" style={{ margin: '16px 0 24px 0' }}>
           <thead>

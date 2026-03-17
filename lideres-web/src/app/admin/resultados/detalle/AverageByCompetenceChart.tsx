@@ -41,7 +41,6 @@ export default function AverageByCompetenceChart({ onBarClick }: { onBarClick?: 
       responsesArr.forEach((entry) => {
         const resp = entry.responses || {};
         Object.keys(resp).forEach((key) => {
-          // key format: group-idx-codigo OR something. Extract last segment as codigo
           const segs = key.split('-');
           const codigo = segs[segs.length - 1];
           const aff = byCodigo[codigo];
@@ -73,7 +72,6 @@ export default function AverageByCompetenceChart({ onBarClick }: { onBarClick?: 
   if (loading) return <div>Calculando datos…</div>;
   if (!data || data.length === 0) return <div>No hay datos suficientes para el gráfico.</div>;
 
-  // render simple SVG bar chart
   const width = 760; const barMaxWidth = 520; const barHeight = 28; const gap = 12;
 
   const maxValue = 100;

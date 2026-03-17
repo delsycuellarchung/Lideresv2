@@ -23,6 +23,7 @@
 # misc
 .DS_Store
 *.pem
+certs/*.crt
 
 # debug
 npm-debug.log*

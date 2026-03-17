@@ -19,10 +19,6 @@ export const getEmailTransporter = () => {
     pool,
   });
 
-  if (!user || !pass) {
-    console.error('❌ Email configuration not set. Set SMTP_USER and SMTP_PASS in .env.local');
-    return null;
-  }
 
   try {
     transporter = nodemailer.createTransport({
@@ -39,7 +35,12 @@ export const getEmailTransporter = () => {
       logger: String(process.env.SMTP_LOGGER || 'false').toLowerCase() === 'true',
       debug: String(process.env.SMTP_DEBUG || 'false').toLowerCase() === 'true',
       tls: {
-        rejectUnauthorized: String(process.env.SMTP_TLS_REJECT_UNAUTHORIZED || 'true').toLowerCase() === 'true',
+        // In development we disable strict TLS validation so self-signed
+        // certificates from a test SMTP are accepted. In production the
+        // behavior is controlled by `SMTP_TLS_REJECT_UNAUTHORIZED`.
+        rejectUnauthorized: process.env.NODE_ENV === 'production'
+          ? String(process.env.SMTP_TLS_REJECT_UNAUTHORIZED || 'true').toLowerCase() === 'true'
+          : false,
       },
     });
 
