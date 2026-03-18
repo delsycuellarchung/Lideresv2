@@ -166,7 +166,7 @@ export default function DraggableModal({ id, isOpen, onClose, minWidth = 360, mi
   if (!mounted) return null;
   if (!isOpen) return null;
   // allow existing CSS to style overlay/modal when class names are provided
-  const overlayStyle = overlayClassName ? undefined : { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 9999, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 12 };
+  const overlayStyle: React.CSSProperties | undefined = overlayClassName ? undefined : { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 9999, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 12 };
 
   const hasPixelPosition = typeof pos.left === 'number' && pos.left > 0 && typeof pos.top === 'number' && pos.top > 0;
 

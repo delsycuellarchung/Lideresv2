@@ -37,6 +37,10 @@ export default function GestionPage() {
 
   const cargarGestiones = async () => {
     try {
+      if (!supabase) {
+        setLoading(false);
+        return;
+      }
       // Obtener todas las gestiones
       const { data: gestionesData, error: gestErr } = await supabase
         .from('gestiones')

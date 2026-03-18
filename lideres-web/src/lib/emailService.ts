@@ -42,7 +42,7 @@ export const getEmailTransporter = () => {
           ? String(process.env.SMTP_TLS_REJECT_UNAUTHORIZED || 'true').toLowerCase() === 'true'
           : false,
       },
-    });
+    } as any);
 
     console.log('✅ Nodemailer transporter created successfully');
     return transporter;

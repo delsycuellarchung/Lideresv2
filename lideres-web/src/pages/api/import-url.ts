@@ -50,6 +50,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json({ inserted: jsonData.length, preview: true, rows: jsonData });
     }
 
+    if (!supabase) return res.status(500).json({ error: 'Database not configured' });
+
     const insertados = await processImportRows(jsonData, supabase);
     return res.status(200).json({ inserted: insertados });
   } catch (err: unknown) {

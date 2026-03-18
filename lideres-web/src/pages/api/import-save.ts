@@ -54,13 +54,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     };
 
     // Ensure created_by is present for RLS and auditing
-    let attemptRows = rows.map((r: Record<string, any>) => ({ created_by: authUserId, ...r }));
+    let attemptRows: Record<string, any>[] = rows.map((r: Record<string, any>) => ({ created_by: authUserId, ...r }));
     let removedColumns: string[] = [];
 
     for (let attempt = 0; attempt < 2; attempt++) {
       const { data, error } = await tryInsert(attemptRows);
       if (!error) {
-        return res.status(200).json({ success: true, inserted: Array.isArray(data) ? data.length : 0, removedColumns });
+        return res.status(200).json({ success: true, inserted: Array.isArray(data) ? (data as any).length : 0, removedColumns });
       }
 
       const msg = (error.message || '').toString();
