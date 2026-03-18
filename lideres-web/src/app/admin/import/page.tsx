@@ -274,7 +274,13 @@ export default function AdminImportPage() {
             const out: RawRow = {};
             // Evaluado fields
             out['Codigo del Evaluado'] = r[findKey(keys, ['codigo'], ['evaluado', 'evaluado']) ?? ''] ?? r['CÃ³digo del Evaluado'] ?? r['CÃ³digo del Evaluado'] ?? null;
-            out['Nombre del Evaluado'] = r[findKey(keys, ['nombre'], ['evaluado']) ?? ''] ?? r['Nombre del Evaluado'] ?? null;
+            // Mejor mapeo: combinar Nombre + Apellido si existen para evitar invertir campos
+            const nombreEvaluadoKey = findKey(keys, ['nombre'], ['evaluado']) ?? '';
+            const apellidoEvaluadoKey = findKey(keys, ['apellido'], ['evaluado']) ?? '';
+            const nombreEvaluadoVal = nombreEvaluadoKey ? (r[nombreEvaluadoKey] ?? null) : (r['Nombre del Evaluado'] ?? null);
+            const apellidoEvaluadoVal = apellidoEvaluadoKey ? (r[apellidoEvaluadoKey] ?? null) : (r['Apellido del Evaluado'] ?? null);
+            const combinedEvaluado = [nombreEvaluadoVal, apellidoEvaluadoVal].filter(Boolean).join(' ').trim();
+            out['Nombre del Evaluado'] = combinedEvaluado || nombreEvaluadoVal || apellidoEvaluadoVal || null;
             out['Cargo del Evaluado'] = r[findKey(keys, ['cargo'], ['evaluado']) ?? ''] ?? r['Cargo del Evaluado'] ?? null;
             out['Correo del Evaluado'] = r[findKey(keys, ['correo','email'], ['evaluado']) ?? ''] ?? r['Correo del Evaluado'] ?? null;
             out['Area del Evaluado'] = r[findKey(keys, ['area'], ['evaluado']) ?? ''] ?? r['Ãrea del Evaluado'] ?? r['Área del Evaluado'] ?? null;
@@ -283,7 +289,13 @@ export default function AdminImportPage() {
 
             // Evaluador fields
             out['Codigo del Evaluador'] = r[findKey(keys, ['codigo'], ['evaluador']) ?? ''] ?? r['Codigo del Evaluador'] ?? null;
-            out['Nombre del Evaluador'] = r[findKey(keys, ['nombre'], ['evaluador']) ?? ''] ?? r['Nombre Evaluador'] ?? r['Nombre del Evaluador'] ?? null;
+            // Mejor mapeo para evaluador: combinar Nombre + Apellido si existe columna 'apellido'
+            const nombreEvaluadorKey = findKey(keys, ['nombre'], ['evaluador']) ?? '';
+            const apellidoEvaluadorKey = findKey(keys, ['apellido'], ['evaluador']) ?? '';
+            const nombreEvaluadorVal = nombreEvaluadorKey ? (r[nombreEvaluadorKey] ?? null) : (r['Nombre Evaluador'] ?? r['Nombre del Evaluador'] ?? null);
+            const apellidoEvaluadorVal = apellidoEvaluadorKey ? (r[apellidoEvaluadorKey] ?? null) : (r['Apellido del Evaluador'] ?? null);
+            const combinedEvaluador = [nombreEvaluadorVal, apellidoEvaluadorVal].filter(Boolean).join(' ').trim();
+            out['Nombre del Evaluador'] = combinedEvaluador || nombreEvaluadorVal || apellidoEvaluadorVal || null;
             out['Cargo del Evaluador'] = r[findKey(keys, ['cargo'], ['evaluador']) ?? ''] ?? r['Cargo del Evaluador'] ?? null;
             out['Correo del Evaluador'] = r[findKey(keys, ['correo','email'], ['evaluador']) ?? ''] ?? r['Correo del Evaluador'] ?? null;
             out['Area del Evaluador'] = r[findKey(keys, ['area'], ['evaluador']) ?? ''] ?? r['Ãrea del Evaluador'] ?? r['Area del Evaluador'] ?? null;

@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { supabase } from './supabaseClient';
 
 let transporter: any = null;
 
@@ -18,8 +19,10 @@ export const getEmailTransporter = () => {
     pass: pass ? `${pass.substring(0, 3)}...${pass.substring(pass.length - 3)}` : 'NOT SET',
     pool,
   });
-
-
+    if (!user || !pass) {
+    console.error('❌ Email configuration not set. Set SMTP_USER and SMTP_PASS in .env.local');
+    return null;
+  }
   try {
     transporter = nodemailer.createTransport({
       host,
@@ -82,7 +85,36 @@ export const sendFormEmail = async (params: {
     return pick.charAt(0).toLocaleUpperCase('es-ES') + pick.slice(1).toLocaleLowerCase('es-ES');
   };
 
-  const displayName = (evaluatorName && String(evaluatorName).trim()) ? String(evaluatorName).trim() : deriveNameFromEmail(evaluatorEmail);
+  const extractGivenName = (fullName?: string) => {
+    if (!fullName) return null;
+    const parts = String(fullName).trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return null;
+    // Prefer last token as given name (handles files with surname(s) first)
+    const candidate = parts[parts.length - 1];
+    // Capitalize first letter and lower the rest (preserve accents via locale)
+    return candidate.charAt(0).toLocaleUpperCase('es-ES') + candidate.slice(1).toLocaleLowerCase('es-ES');
+  };
+
+  let displayName = (evaluatorName && String(evaluatorName).trim()) ? String(evaluatorName).trim() : deriveNameFromEmail(evaluatorEmail);
+
+  // If evaluatorName not provided, try to resolve from DB (evaluators table or personas)
+  if ((!evaluatorName || String(evaluatorName).trim() === '') && typeof evaluatorEmail === 'string' && supabase) {
+    try {
+      const emailKey = String(evaluatorEmail).toLowerCase();
+      const { data: evData } = await supabase.from('evaluators').select('nombre_evaluador,nombre').or(`correo_evaluador.eq.${emailKey},correo.eq.${emailKey}`).limit(1);
+      if (Array.isArray(evData) && evData.length > 0) {
+        const candidate = evData[0] as any;
+        const candidateName = candidate.nombre_evaluador || candidate.nombre || null;
+        if (candidateName) {
+          const given = extractGivenName(candidateName as string) || String(candidateName);
+          displayName = String(given);
+        }
+      }
+    } catch (dbErr) {
+      // ignore DB lookup errors, fallback to derived name
+      if (String(process.env.SMTP_DEBUG || 'false').toLowerCase() === 'true') console.warn('SMTP: could not lookup name from DB', dbErr);
+    }
+  }
 
   if (String(process.env.SMTP_DEBUG || 'false').toLowerCase() === 'true') {
     console.log('📨 [DEBUG] Email greeting values:', { evaluatorName, evaluatorEmail, displayName });

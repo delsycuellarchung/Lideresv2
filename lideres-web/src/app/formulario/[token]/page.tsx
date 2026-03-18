@@ -50,6 +50,31 @@ export default function FormularioPublicPage() {
               const edName = resp.evaluado_nombre || fd.evaluado_nombre || fd.nombre_evaluado || '';
               if (evalName) setEvaluatorName(evalName);
               if (edName) setEvaluadoName(String(edName));
+
+              // Si no hay preguntas/instrucciones en localStorage, cargar desde form_data
+              try {
+                const hasItems = (items && items.length > 0);
+                const hasInstrucciones = (instrucciones && instrucciones.length > 0);
+                const fdAf = fd.afirmaciones && Array.isArray(fd.afirmaciones) ? fd.afirmaciones : null;
+                const fdComps = fd.competencias && Array.isArray(fd.competencias) ? fd.competencias : null;
+                const fdEsts = fd.estilos && Array.isArray(fd.estilos) ? fd.estilos : null;
+                const combined = [] as any[];
+                if (fdAf) combined.push(...fdAf);
+                if (fdComps) combined.push(...fdComps);
+                if (fdEsts) combined.push(...fdEsts);
+
+                if (!hasItems && combined.length > 0) {
+                  setItems(combined);
+                  console.log('✅ Cargadas preguntas desde Supabase form_data');
+                }
+
+                if (!hasInstrucciones && fd.instrucciones && Array.isArray(fd.instrucciones) && fd.instrucciones.length > 0) {
+                  setInstrucciones(fd.instrucciones.map((i: any) => ({ etiqueta: i.etiqueta || i.label || i.name || '', descripcion: i.descripcion || i.desc || '' })));
+                  console.log('✅ Cargadas instrucciones desde Supabase form_data');
+                }
+              } catch (e) {
+                console.warn('Aviso: no se pudo aplicar form_data al formulario', e);
+              }
             }
           }
         } catch (e) {
