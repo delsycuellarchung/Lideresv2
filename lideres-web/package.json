@@ -12,7 +12,6 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",
-    "apexcharts": "^4.7.0",
     "busboy": "^1.6.0",
     "dotenv": "^17.3.1",
     "exceljs": "^4.4.0",
@@ -20,13 +19,15 @@
     "next": "16.1.6",
     "nodemailer": "^8.0.1",
     "react": "19.2.3",
-    "react-apexcharts": "^1.4.0",
     "react-circular-progressbar": "^2.2.0",
     "react-dom": "19.2.3",
+    "apexcharts": "^4.0.0",
+    "react-apexcharts": "^1.4.0",
     "uuid": "^13.0.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "cross-env": "^7.0.3",
     "@tailwindcss/postcss": "^4",
     "@types/formidable": "^3.4.6",
     "@types/node": "^20",
@@ -35,7 +36,6 @@
     "@types/react-dom": "^19",
     "autoprefixer": "^10.4.24",
     "babel-plugin-react-compiler": "1.0.0",
-    "cross-env": "^7.0.3",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "postcss": "^8.5.6",
