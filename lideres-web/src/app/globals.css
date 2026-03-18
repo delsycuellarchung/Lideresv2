@@ -365,6 +365,9 @@ html::-webkit-scrollbar, body::-webkit-scrollbar, #__next::-webkit-scrollbar {
 .pw-toggle:hover { background: rgba(15,23,42,0.03); }
 .password-wrapper .login-input { padding-right: 48px; }
 
+/* Icon placed inside input wrappers */
+.password-wrapper .login-input.with-left-icon { padding-left: 44px; }
+
 .pw-toggle { transition: transform 180ms ease, background 120ms ease; transform-origin: center; }
 .pw-toggle.active { transform: translateY(-50%) rotate(4deg) scale(1.01); }
 .pw-toggle:active { transform: translateY(-50%) rotate(0deg) scale(0.995); }
