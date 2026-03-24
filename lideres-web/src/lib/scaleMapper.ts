@@ -1,13 +1,21 @@
 export const LABEL_TO_VALUE: Record<string, number> = {
   'nunca': 1,
   'rara vez': 2,
+  'rara vez.': 2,
+  'rara-vez': 2,
   'casi nunca': 3,
+  'casi-nunca': 3,
+  'ocasionalmente': 4,
   'a veces': 4,
+  'a-veces': 4,
+  'frecuentemente': 4,
+  'a menudo': 4,
   'siempre': 5,
+  'casi siempre': 5,
 };
 
 export function mapLabelToNumeric(label?: string): number | null {
-  if (!label) return null;
+  if (!label || typeof label !== 'string') return null;
   const norm = label.trim().toLowerCase();
   if (norm in LABEL_TO_VALUE) return LABEL_TO_VALUE[norm];
   return null;

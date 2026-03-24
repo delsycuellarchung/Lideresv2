@@ -35,17 +35,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { error: updateError } = await supabase
+    const { data: updatedRows, error: updateError } = await supabase
       .from('form_submissions')
       .update({
-        responses,
+        responses: typeof responses === 'object' && !Array.isArray(responses) 
+          ? { ...responses, evaluado_nombre: (submission as any).responses?.evaluado_nombre || (submission as any).form_data?.evaluado_nombre || null }
+          : responses,
         status: 'completed',
         completed_at: new Date().toISOString(),
       })
-      .eq('token', token);
+      .eq('token', token)
+      .eq('status', 'pending')
+      .select('id');
 
     if (updateError) {
       throw updateError;
+    }
+
+    // If no rows were updated, the token was already completed/expired
+    if (!Array.isArray(updatedRows) || updatedRows.length === 0) {
+      return NextResponse.json({ error: 'Este formulario ya fue respondido o no está disponible' }, { status: 409 });
     }
 
     return NextResponse.json({

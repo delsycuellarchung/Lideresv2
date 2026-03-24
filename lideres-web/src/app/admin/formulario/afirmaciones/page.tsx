@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import ModalPreview from '../preview/ModalPreview';
 import dynamic from 'next/dynamic';
 const DraggableModal = dynamic(() => import('@/components/DraggableModal'), { ssr: false });
+import { saveFormulario } from '@/lib/formularioClient';
 
 type Afirmacion = {
   codigo?: string;
@@ -34,41 +35,25 @@ export default function AfirmacionesPage() {
   const [filterValue, setFilterValue] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    try {
-      const raw = localStorage.getItem('formulario_afirmaciones');
-      if (raw) {
-        const parsed = JSON.parse(raw) || [];
-        const normalized = Array.isArray(parsed) ? parsed.map((a: any) => {
-          const item = typeof a === 'string' ? { pregunta: a } : (a || {});
-          const codigoVal = item.codigo != null ? (typeof item.codigo === 'object' ? (item.codigo.codigo ?? item.codigo.nombre ?? JSON.stringify(item.codigo)) : String(item.codigo)) : undefined;
-          const preguntaVal = item.pregunta != null ? (typeof item.pregunta === 'object' ? (item.pregunta.pregunta ?? item.pregunta.texto ?? JSON.stringify(item.pregunta)) : String(item.pregunta)) : '';
-          const tipoVal = item.tipo != null ? (typeof item.tipo === 'object' ? (item.tipo.nombre ?? JSON.stringify(item.tipo)) : String(item.tipo)) : undefined;
-          const categoriaVal = item.categoria != null ? String(item.categoria) : undefined;
-          return { codigo: codigoVal, pregunta: preguntaVal, tipo: tipoVal, categoria: categoriaVal };
-        }) : [];
-        setItems(normalized as Afirmacion[]);
+    (async () => { try {
+      const res = await fetch('/api/formulario');
+      if (res.ok) {
+        const json = await res.json();
+        if (Array.isArray(json.afirmaciones) && json.afirmaciones.length > 0) {
+          setItems(json.afirmaciones as Afirmacion[]);
+        }
+        if (Array.isArray(json.competencias) && json.competencias.length > 0) {
+          setAvailableCompetencias(json.competencias.map((it: any) => typeof it === 'string' ? it : String(it.nombre ?? it)));
+        }
+        if (Array.isArray(json.estilos) && json.estilos.length > 0) {
+          setAvailableEstilos(json.estilos.map((it: any) => typeof it === 'string' ? it : String(it.nombre ?? it)));
+        }
+        if (Array.isArray(json.instrucciones) && json.instrucciones.length > 0) {
+          setInstrucciones(json.instrucciones);
+        }
+        return;
       }
-    } catch (e) { console.warn(e); }
-    try {
-      const rawC = localStorage.getItem('formulario_competencias');
-      if (rawC) {
-        const parsed = JSON.parse(rawC) || [];
-        const normalized = (parsed || []).map((it: any) => typeof it === 'string' ? it : (it && typeof it === 'object' ? String(it.nombre ?? it.codigo ?? it.label ?? JSON.stringify(it)) : String(it ?? '')));
-        setAvailableCompetencias(normalized);
-      }
-    } catch (e) { console.warn(e); }
-    try {
-      const rawE = localStorage.getItem('formulario_estilos');
-      if (rawE) {
-        const parsed = JSON.parse(rawE) || [];
-        const normalized = (parsed || []).map((it: any) => typeof it === 'string' ? it : (it && typeof it === 'object' ? String(it.nombre ?? it.codigo ?? it.label ?? JSON.stringify(it)) : String(it ?? '')));
-        setAvailableEstilos(normalized);
-      }
-    } catch (e) { console.warn(e); }
-    try {
-      const rawI = localStorage.getItem('formulario_instrucciones');
-      if (rawI) setInstrucciones(JSON.parse(rawI));
-    } catch (e) { console.warn(e); }
+    } catch (e) { console.warn(e); } })();
   }, []);
 
   // helper: determine whether a given tipo value belongs to competencias or estilos
@@ -147,12 +132,12 @@ export default function AfirmacionesPage() {
       const next = [...items];
       next[editingIndex] = entry;
       setItems(next);
-      try { localStorage.setItem('formulario_afirmaciones', JSON.stringify(next)); } catch (e) { console.warn(e); }
+      try { saveFormulario({ afirmaciones: next }); } catch (e) { console.warn(e); }
       setEditingIndex(null);
     } else {
       const next = [...items, entry];
       setItems(next);
-      try { localStorage.setItem('formulario_afirmaciones', JSON.stringify(next)); } catch (e) { console.warn(e); }
+      try { saveFormulario({ afirmaciones: next }); } catch (e) { console.warn(e); }
     }
 
     setCodigo(""); setPregunta(""); setTipo(null); setTipoFuente(null); setOpen(false);
@@ -174,7 +159,7 @@ export default function AfirmacionesPage() {
   const deleteItem = (index: number) => {
     const next = items.filter((_, i) => i !== index);
     setItems(next);
-    try { localStorage.setItem('formulario_afirmaciones', JSON.stringify(next)); } catch (e) { console.warn(e); }
+    try { saveFormulario({ afirmaciones: next }); } catch (e) { console.warn(e); }
     // if we were editing this item, reset modal
     if (editingIndex === index) {
       setEditingIndex(null);

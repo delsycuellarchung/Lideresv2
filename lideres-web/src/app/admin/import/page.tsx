@@ -398,13 +398,7 @@ export default function AdminImportPage() {
             <h3 style={{ margin: '0 0 12px 0', fontSize: 16, fontWeight: 600 }}>
               Importaciones Recientes:
             </h3>
-            <div>
-              <button
-                onClick={clearHistory}
-                className="btn-press"
-                style={{ padding: '6px 10px', borderRadius: 8, fontSize: 13 }}
-              >Borrar historial</button>
-            </div>
+            
           </div>
           {imports.length === 0 ? (
             <p style={{ color: '#666' }}>No hay importaciones registradas</p>

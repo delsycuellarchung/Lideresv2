@@ -13,14 +13,16 @@ export async function POST(req: NextRequest) {
     }
 
     // Actualizar el registro en form_submissions
-    const { error } = await supabase
+    const { data: updatedRows, error } = await supabase
       .from('form_submissions')
       .update({
         status,
         completed_at: completedAt,
         responses: JSON.stringify(responses)
       })
-      .eq('token', token);
+      .eq('token', token)
+      .eq('status', 'pending')
+      .select('id');
 
     if (error) {
       console.error('Error updating submission:', error);
@@ -28,6 +30,10 @@ export async function POST(req: NextRequest) {
         { error: error.message },
         { status: 500 }
       );
+    }
+
+    if (!Array.isArray(updatedRows) || updatedRows.length === 0) {
+      return NextResponse.json({ error: 'Este formulario ya fue respondido o no está disponible' }, { status: 409 });
     }
 
     console.log(`✅ Submission status updated: token=${token}, status=${status}`);

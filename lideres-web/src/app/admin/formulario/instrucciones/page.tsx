@@ -3,6 +3,7 @@
 import React from "react";
 import dynamic from 'next/dynamic';
 const DraggableModal = dynamic(() => import('@/components/DraggableModal'), { ssr: false });
+import { saveFormulario } from '@/lib/formularioClient';
 
 export default function InstruccionesPage() {
   const [items, setItems] = React.useState<{etiqueta:string, descripcion?:string}[]>([]);
@@ -12,14 +13,23 @@ export default function InstruccionesPage() {
   const [editIndex, setEditIndex] = React.useState<number | null>(null);
 
   React.useEffect(() => {
-    try {
+    (async () => { try {
+      const res = await fetch('/api/formulario');
+      if (res.ok) {
+        const json = await res.json();
+        if (Array.isArray(json.instrucciones) && json.instrucciones.length > 0) {
+          setItems(json.instrucciones);
+          return;
+        }
+      }
       const raw = localStorage.getItem('formulario_instrucciones');
       if (raw) setItems(JSON.parse(raw));
-    } catch (e) { console.warn(e); }
+    } catch (e) { console.warn(e); } })();
   }, []);
 
   const persist = (next: { etiqueta: string; descripcion?: string }[]) => {
     try { localStorage.setItem('formulario_instrucciones', JSON.stringify(next)); } catch (e) { console.warn(e); }
+    try { saveFormulario({ instrucciones: next }); } catch (e) { console.warn(e); }
   };
 
   const openCreate = () => {

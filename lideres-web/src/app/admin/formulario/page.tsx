@@ -46,13 +46,42 @@ export default function FormularioPage() {
       next = { ...items, [activeSection]: [...(items[activeSection] || []), entry] };
       setItems(next);
       try { localStorage.setItem(key, JSON.stringify(next[activeSection])); } catch (e) { console.warn("could not persist formulario item", e); }
+      try { import('@/lib/formularioService').then(m => m.persistFormularioToServer({ afirmaciones: JSON.parse(localStorage.getItem('formulario_afirmaciones') || '[]'), competencias: JSON.parse(localStorage.getItem('formulario_competencias') || '[]'), estilos: JSON.parse(localStorage.getItem('formulario_estilos') || '[]'), instrucciones: JSON.parse(localStorage.getItem('formulario_instrucciones') || '[]') })); } catch (e) {}
     } else {
       next = { ...items, [activeSection]: [...(items[activeSection] || []), newName] };
       setItems(next);
       try { localStorage.setItem(key, JSON.stringify(next[activeSection])); } catch (e) { console.warn("could not persist formulario item", e); }
+      try { import('@/lib/formularioService').then(m => m.persistFormularioToServer({ afirmaciones: JSON.parse(localStorage.getItem('formulario_afirmaciones') || '[]'), competencias: JSON.parse(localStorage.getItem('formulario_competencias') || '[]'), estilos: JSON.parse(localStorage.getItem('formulario_estilos') || '[]'), instrucciones: JSON.parse(localStorage.getItem('formulario_instrucciones') || '[]') })); } catch (e) {}
     }
     closeModal();
   };
+
+  // Persist all sections to localStorage whenever `items` changes
+  React.useEffect(() => {
+    try {
+      Object.keys(items).forEach((k) => {
+        localStorage.setItem(`formulario_${k}`, JSON.stringify(items[k] || []));
+      });
+    } catch (e) {
+      console.warn("could not persist formulario items on update", e);
+    }
+
+    // Also try to persist to server (best-effort). Requires user authenticated for server-side DB save.
+    (async () => {
+      try {
+        const mod = await import('@/lib/formularioService');
+        // pass the sections explicitly
+        await mod.persistFormularioToServer({
+          afirmaciones: Array.isArray(items.afirmaciones) ? items.afirmaciones : [],
+          competencias: Array.isArray(items.competencias) ? items.competencias : [],
+          estilos: Array.isArray(items.estilos) ? items.estilos : [],
+          instrucciones: Array.isArray(items.instrucciones) ? items.instrucciones : []
+        });
+      } catch (e) {
+        // non-blocking
+      }
+    })();
+  }, [items]);
 
   return (
     <div style={{ padding: 28 }}>

@@ -10,9 +10,11 @@ export default function AverageByCompetenceChart({ onBarClick }: { onBarClick?: 
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
-    setLoading(true);
-    try {
-      const rawAff = localStorage.getItem('formulario_afirmaciones') || '[]';
+    let mounted = true;
+    const load = async () => {
+      setLoading(true);
+      try {
+        const rawAff = localStorage.getItem('formulario_afirmaciones') || '[]';
       const parsedAff = JSON.parse(rawAff) || [];
       const afirmaciones: Afirm[] = Array.isArray(parsedAff) ? parsedAff.map((a: any) => {
         const item = typeof a === 'string' ? { pregunta: a } : (a || {});
@@ -33,19 +35,33 @@ export default function AverageByCompetenceChart({ onBarClick }: { onBarClick?: 
         return;
       }
       const byCodigo: Record<string, Afirm> = {};
-      afirmaciones.forEach((a) => { if (a.codigo) byCodigo[a.codigo] = a; });
+      afirmaciones.forEach((a) => { if (a.codigo) byCodigo[String(a.codigo)] = a; });
+
+      const normalizeResponses = (respObj: Record<string, any>) => {
+        const out: Record<string, any> = {};
+        if (!respObj) return out;
+        Object.keys(respObj).forEach((k) => {
+          const v = respObj[k];
+          if (byCodigo[String(k)]) { out[String(k)] = v; return; }
+          const m = String(k).match(/^(?:comp|est)-(\d+)$/i);
+          if (m) {
+            const idx = parseInt(m[1], 10);
+            const aff = Array.isArray(afirmaciones) && afirmaciones[idx] ? afirmaciones[idx] : null;
+            if (aff && aff.codigo) { out[String(aff.codigo)] = v; return; }
+          }
+          out[String(k)] = v;
+        });
+        return out;
+      };
 
       // accumulate per competence
       const accum: Record<string, { sum: number; count: number }> = {};
 
       responsesArr.forEach((entry) => {
-        const resp = entry.responses || {};
+        const resp = normalizeResponses(entry.responses || {});
         Object.keys(resp).forEach((key) => {
-          const segs = key.split('-');
-          const codigo = segs[segs.length - 1];
-          const aff = byCodigo[codigo];
-          if (!aff) return; // skip if no match
-          // only consider competencies
+          const aff = byCodigo[String(key)];
+          if (!aff) return;
           const competence = aff.tipo || 'Sin competencia';
           const etiqueta = resp[key];
           const instruccionesLabels = instrucciones && instrucciones.length > 0 ? instrucciones.map(i => i.etiqueta) : undefined;
@@ -66,13 +82,48 @@ export default function AverageByCompetenceChart({ onBarClick }: { onBarClick?: 
       console.warn(e);
       setData([]);
     }
-    setLoading(false);
+    };
+
+    // Try server first, fallback to localStorage
+    (async () => {
+      try {
+        const res = await fetch('/api/admin/form-responses');
+        if (res.ok) {
+          const json = await res.json().catch(() => ({}));
+          if (json && Array.isArray(json.data) && json.data.length > 0) {
+            // write responses into localStorage shape expected by old logic
+            try { localStorage.setItem('form_responses', JSON.stringify(json.data)); } catch {};
+            await load();
+          } else {
+            await load();
+          }
+        } else {
+          await load();
+        }
+      } catch (e) {
+        await load();
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+
+    const onStorage = (ev: StorageEvent) => {
+      if (ev.key === 'form_responses') {
+        // recompute when local responses change
+        try { load(); } catch {};
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => { mounted = false; window.removeEventListener('storage', onStorage); };
   }, []);
 
   if (loading) return <div>Calculando datos…</div>;
   if (!data || data.length === 0) return <div>No hay datos suficientes para el gráfico.</div>;
 
-  const width = 760; const barMaxWidth = 520; const barHeight = 28; const gap = 12;
+  const width = 760;
+  const barMaxWidth = 520;
+  const barHeight = 36;
+  const gap = 12;
 
   const maxValue = 100;
 
@@ -86,8 +137,7 @@ export default function AverageByCompetenceChart({ onBarClick }: { onBarClick?: 
             <div key={d.competence} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: gap, cursor: onBarClick ? 'pointer' : 'default' }} onClick={() => onBarClick?.(d.competence)}>
               <div style={{ width: 200, fontSize: 13, color: 'rgba(15,23,42,0.9)', fontWeight: 700 }}>{d.competence}</div>
               <div style={{ flex: '1 1 auto', display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div title={`${d.avg.toFixed(1)} — ${d.count} respuestas`} style={{ background: 'linear-gradient(90deg,#60a5fa,#4f46e5)', height: barHeight, width: w, borderRadius: 8 }} />
-                <div style={{ width: 52, textAlign: 'right', fontWeight: 700 }}>{Math.round(d.avg)}%</div>
+                <div title={`${d.avg.toFixed(1)} — ${d.count} respuestas`} style={{ background: 'linear-gradient(90deg,#3b82f6,#7c3aed)', height: barHeight, width: w, borderRadius: 10, boxShadow: '0 6px 18px rgba(99,102,241,0.12)' }} />
               </div>
             </div>
           );

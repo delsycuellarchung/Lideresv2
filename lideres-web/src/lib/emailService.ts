@@ -19,10 +19,7 @@ export const getEmailTransporter = () => {
     pass: pass ? `${pass.substring(0, 3)}...${pass.substring(pass.length - 3)}` : 'NOT SET',
     pool,
   });
-    if (!user || !pass) {
-    console.error('❌ Email configuration not set. Set SMTP_USER and SMTP_PASS in .env.local');
-    return null;
-  }
+
   try {
     transporter = nodemailer.createTransport({
       host,
@@ -80,22 +77,22 @@ export const sendFormEmail = async (params: {
     // remove trailing numbers and non-letter chars from tokens, preserve accented letters
     const parts = cleaned.split(' ').map(p => p.replace(/[^\p{L}]+/gu, '')).filter(Boolean);
     if (parts.length === 0) return 'Evaluador';
-    const pick = parts[0];
-    // capitalize using locale to preserve accents
-    return pick.charAt(0).toLocaleUpperCase('es-ES') + pick.slice(1).toLocaleLowerCase('es-ES');
+    // If the local part looks like a full name (multiple tokens), title-case and join them.
+    if (parts.length > 1) {
+      return parts.map(p => p.charAt(0).toLocaleUpperCase('es-ES') + p.slice(1).toLocaleLowerCase('es-ES')).join(' ');
+    }
+    // Single token (likely a username) — avoid showing raw username, fallback to generic
+    return 'Evaluador';
   };
 
-  const extractGivenName = (fullName?: string) => {
+  const titleCaseName = (fullName?: string) => {
     if (!fullName) return null;
     const parts = String(fullName).trim().split(/\s+/).filter(Boolean);
     if (parts.length === 0) return null;
-    // Prefer last token as given name (handles files with surname(s) first)
-    const candidate = parts[parts.length - 1];
-    // Capitalize first letter and lower the rest (preserve accents via locale)
-    return candidate.charAt(0).toLocaleUpperCase('es-ES') + candidate.slice(1).toLocaleLowerCase('es-ES');
+    return parts.map(p => p.charAt(0).toLocaleUpperCase('es-ES') + p.slice(1).toLocaleLowerCase('es-ES')).join(' ');
   };
 
-  let displayName = (evaluatorName && String(evaluatorName).trim()) ? String(evaluatorName).trim() : deriveNameFromEmail(evaluatorEmail);
+  let displayName = (evaluatorName && String(evaluatorName).trim()) ? (titleCaseName(String(evaluatorName).trim()) || String(evaluatorName).trim()) : deriveNameFromEmail(evaluatorEmail);
 
   // If evaluatorName not provided, try to resolve from DB (evaluators table or personas)
   if ((!evaluatorName || String(evaluatorName).trim() === '') && typeof evaluatorEmail === 'string' && supabase) {
@@ -106,8 +103,8 @@ export const sendFormEmail = async (params: {
         const candidate = evData[0] as any;
         const candidateName = candidate.nombre_evaluador || candidate.nombre || null;
         if (candidateName) {
-          const given = extractGivenName(candidateName as string) || String(candidateName);
-          displayName = String(given);
+          const full = titleCaseName(String(candidateName)) || String(candidateName);
+          displayName = String(full);
         }
       }
     } catch (dbErr) {
@@ -164,15 +161,14 @@ export const sendFormEmail = async (params: {
           <!-- Saludo personalizado -->
           <div style="margin-bottom: 24px;">
             <p style="font-size: 18px; color: #0f172a; margin: 0 0 8px 0; font-weight: 600;">¡Hola, <span style="color: #4f46e5;">${displayName}</span>!</p>
-            <p style="font-size: 14px; color: #64748b; margin: 0; line-height: 1.6;">
-              Esperamos tu valiosa evaluación sobre el desempeño de:
-            </p>
             <!-- Texto informado por el cliente -->
-            <div style="margin-top:12px; font-size:14px; color:#475569; line-height:1.7;">
-              <p style="margin:0 0 8px 0;">Esta herramienta nos permitirá conocer los estilos de liderazgo de nuestros Gerentes y Subgerentes, así como identificar oportunidades de mejora que aporten al desarrollo de toda la organización.</p>
-              <p style="margin:0 0 8px 0;">Su participación es clave, les pedimos que respondan la evaluación con total objetividad y sinceridad, ya que solo así podremos obtener resultados que reflejen la realidad y nos ayuden a evolucionar.</p>
-              <p style="margin:0 0 8px 0;">Al momento de completar el formulario, piensen en su líder directo. En la parte superior izquierda del formulario encontrará el nombre del líder asignado, lo cual les permitirá confirmar que están evaluando correctamente.</p>
-              <p style="margin:0 0 8px 0;">El formulario contiene diversas afirmaciones sobre situaciones laborales reales que se han presentado o que se presentan. Seleccionen únicamente una opción para cada afirmación, evaluando la frecuencia con la que su líder generalmente actúa o se comporta de esa manera.</p>
+              <div style="margin-top:12px; font-size:14px; color:#475569; line-height:1.7;">
+              <p style="margin:0 0 8px 0;">Esta herramienta nos permitirá conocer los estilos de liderazgo de nuestros líderes, así como identificar oportunidades de mejora o desarrollo.</p>
+              <p style="margin:0 0 8px 0;">Tu participación es clave, responde la evaluación con total objetividad y sinceridad, así obtendremos resultados que reflejen la realidad.</p>
+              <p style="margin:0 0 8px 0;">Al momento de completar el formulario, piensa en tu líder directo; en el formulario encontrarás su nombre en la parte superior izquierda.</p>
+              <p style="margin:0 0 8px 0;">El formulario contiene diversas afirmaciones, selecciona una opción para cada afirmación, evaluando la frecuencia con la que ocurre.</p>
+              <p style="margin:0 0 8px 0;">La evaluación estará disponible desde hoy hasta el viernes 27 de marzo.</p>
+              <p style="margin:0 0 8px 0;">Agradecemos tu participación, compromiso y colaboración en este proceso tan importante.</p>
             </div>
           </div>
 
@@ -191,22 +187,19 @@ export const sendFormEmail = async (params: {
             
           </div>
 
-          <!-- Botón CTA -->
+          <!-- Botón CTA: compatibilidad con clientes de correo (VML para Outlook + fallback sólido) -->
           <div style="text-align: center; margin-bottom: 32px;">
-            <a href="${formLink}" style="
-              display: inline-block;
-              background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-              color: white;
-              padding: 16px 48px;
-              border-radius: 8px;
-              text-decoration: none;
-              font-weight: 600;
-              font-size: 15px;
-              box-shadow: 0 8px 24px rgba(79, 70, 229, 0.3);
-              transition: transform 0.2s;
-            " onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
-              ➔ Completar Evaluación
-            </a>
+            <!--[if mso]>
+              <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="${formLink}" style="height:48px;v-text-anchor:middle;width:260px;" arcsize="10%" strokecolor="#4f46e5" fillcolor="#4f46e5">
+                <w:anchorlock/>
+                <center style="color:#ffffff;font-weight:600;font-size:15px;">Completar Evaluación</center>
+              </v:roundrect>
+            <![endif]-->
+            <!--[if !mso]><!-- -->
+              <a href="${formLink}" style="display:inline-block;background-color:#4f46e5;color:#ffffff;padding:14px 40px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;line-height:1;">
+                Completar Evaluación
+              </a>
+            <!--<![endif]-->
           </div>
 
           <!-- Detalles importantes (simplificados) -->

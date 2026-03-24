@@ -15,14 +15,36 @@ export default function FormularioPublicPage() {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [showSuccessModal, setShowSuccessModal] = React.useState(false);
+  const [showConfirmModal, setShowConfirmModal] = React.useState(false);
   const [evaluatorName, setEvaluatorName] = React.useState<string>('');
   const [evaluadoName, setEvaluadoName] = React.useState<string>('');
   const [validationError, setValidationError] = React.useState<string>('');
+  const [isDirty, setIsDirty] = React.useState(false);
+  const [draftSavedAt, setDraftSavedAt] = React.useState<string | null>(null);
   const headerRef = React.useRef<HTMLDivElement | null>(null);
   const [headerHeight, setHeaderHeight] = React.useState<number>(0);
 
   React.useEffect(() => {
     if (!token) return;
+    // Claim the token to prevent forwarding: POST /api/claim-submission
+    (async () => {
+      try {
+        const resp = await fetch('/api/claim-submission', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token }),
+        }).then(r => r.json());
+        if (resp && resp.claimed === false) {
+          if (resp.reason === 'completed') {
+            setError('Este formulario ya fue completado anteriormente.');
+          } else {
+            setError('Este enlace ya fue abierto desde otro dispositivo y no puede usarse aquí.');
+          }
+        }
+      } catch (e) {
+        console.warn('Aviso: no se pudo reclamar token', e);
+      }
+    })();
     // Load form data from localStorage (in a real scenario, fetch from API)
     try {
       const raw = localStorage.getItem('formulario_afirmaciones');
@@ -72,6 +94,32 @@ export default function FormularioPublicPage() {
                   setInstrucciones(fd.instrucciones.map((i: any) => ({ etiqueta: i.etiqueta || i.label || i.name || '', descripcion: i.descripcion || i.desc || '' })));
                   console.log('✅ Cargadas instrucciones desde Supabase form_data');
                 }
+                  // If there was no form_data in the submission, try to load the canonical form
+                  if (!hasItems && (!combined || combined.length === 0)) {
+                    try {
+                      const fResp = await fetch('/api/formulario');
+                      if (fResp.ok) {
+                        const fJson = await fResp.json();
+                        const fAf = Array.isArray(fJson.afirmaciones) ? fJson.afirmaciones : [];
+                        const fComps = Array.isArray(fJson.competencias) ? fJson.competencias : [];
+                        const fEsts = Array.isArray(fJson.estilos) ? fJson.estilos : [];
+                        const merged: any[] = [];
+                        if (fAf.length) merged.push(...fAf);
+                        if (fComps.length) merged.push(...fComps);
+                        if (fEsts.length) merged.push(...fEsts);
+                        if (merged.length) {
+                          setItems(merged);
+                          console.log('✅ Cargadas preguntas desde /api/formulario (fallback)');
+                        }
+                        if (!hasInstrucciones && Array.isArray(fJson.instrucciones) && fJson.instrucciones.length) {
+                          setInstrucciones(fJson.instrucciones.map((i: any) => ({ etiqueta: i.etiqueta || i.label || i.name || '', descripcion: i.descripcion || i.desc || '' })));
+                          console.log('✅ Cargadas instrucciones desde /api/formulario (fallback)');
+                        }
+                      }
+                    } catch (e) {
+                      console.warn('Aviso: no se pudo cargar /api/formulario como fallback', e);
+                    }
+                  }
               } catch (e) {
                 console.warn('Aviso: no se pudo aplicar form_data al formulario', e);
               }
@@ -100,17 +148,32 @@ export default function FormularioPublicPage() {
     return () => window.removeEventListener('resize', measure);
   }, [instrucciones.length, evaluadoName, evaluatorName]);
 
-  // Guardar respuestas en localStorage cuando cambien (con debounce)
-  React.useEffect(() => {
-    if (!token || Object.keys(responses).length === 0) return;
+  // Auto-save removed: progress will be saved only when user clicks "Guardar progreso"
 
-    const timeoutId = setTimeout(() => {
+  // provide explicit save-progress action (local-only)
+  const saveProgress = () => {
+    if (!token) return;
+    try {
       localStorage.setItem(`form_responses_${token}`, JSON.stringify(responses));
-      console.log('💾 Respuestas guardadas automáticamente');
-    }, 1000); // Guardar después de 1 segundo sin cambios
+      setIsDirty(false);
+      setDraftSavedAt(new Date().toISOString());
+      console.log('💾 Progreso guardado manualmente');
+    } catch (e) {
+      console.warn('Error guardando progreso', e);
+    }
+  };
 
-    return () => clearTimeout(timeoutId);
-  }, [responses, token]);
+  // warn user about leaving with unsaved changes
+  React.useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (isDirty) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [isDirty]);
 
   const determineTipoCategory = (tipoVal?: string | null) => {
     if (!tipoVal) return 'unknown';
@@ -145,6 +208,7 @@ export default function FormularioPublicPage() {
   }, [grouped]);
   const handleChange = (key: string, value: string) => {
     setResponses((prev) => ({ ...prev, [key]: value }));
+    setIsDirty(true);
   };
 
   const validateResponses = () => {
@@ -165,6 +229,7 @@ export default function FormularioPublicPage() {
       return;
     }
 
+    if (error) return; // do not allow submit if token was blocked
     setLoading(true);
     try {
       const id = `resp_${Date.now()}`;
@@ -180,6 +245,90 @@ export default function FormularioPublicPage() {
             const fd = (data as any).form_data || {};
             evaluadoNombre = resp.evaluado_nombre || fd.evaluado_nombre || null;
             evaluadoCodigo = resp.evaluado_codigo || fd.evaluado_codigo || fd.codigo || null;
+
+            // Si no tiene código, buscarlo en la tabla evaluators por nombre
+            if (!evaluadoCodigo && evaluadoNombre) {
+              try {
+                const { data: evData } = await supabase
+                  .from('evaluators')
+                  .select('codigo_evaluado')
+                  .ilike('nombre_evaluado', evaluadoNombre.trim())
+                  .limit(1)
+                  .single();
+                if (evData?.codigo_evaluado) {
+                  evaluadoCodigo = String(evData.codigo_evaluado);
+                }
+              } catch (e) {
+                console.warn('Aviso: no se pudo resolver codigo_evaluado desde evaluators', e);
+              }
+            }
+            // Si no tiene código, buscarlo en la tabla evaluators por nombre
+            if (!evaluadoCodigo && evaluadoNombre) {
+              try {
+                const { data: evData } = await supabase
+                  .from('evaluators')
+                  .select('codigo_evaluado')
+                  .ilike('nombre_evaluado', evaluadoNombre.trim())
+                  .limit(1)
+                  .single();
+                if (evData?.codigo_evaluado) {
+                  evaluadoCodigo = String(evData.codigo_evaluado);
+                }
+              } catch (e) {
+                console.warn('Aviso: no se pudo resolver codigo_evaluado desde evaluators', e);
+              }
+            }
+
+            // Si no tiene código, buscarlo en la tabla evaluators por nombre
+            if (!evaluadoCodigo && evaluadoNombre) {
+              try {
+                const { data: evData } = await supabase
+                  .from('evaluators')
+                  .select('codigo_evaluado')
+                  .ilike('nombre_evaluado', evaluadoNombre.trim())
+                  .limit(1)
+                  .single();
+                if (evData?.codigo_evaluado) {
+                  evaluadoCodigo = String(evData.codigo_evaluado);
+                }
+              } catch (e) {
+                console.warn('Aviso: no se pudo resolver codigo_evaluado desde evaluators', e);
+              }
+            }
+
+            // Si no tiene código, buscarlo en la tabla evaluators por nombre
+            if (!evaluadoCodigo && evaluadoNombre) {
+              try {
+                const { data: evData } = await supabase
+                  .from('evaluators')
+                  .select('codigo_evaluado')
+                  .ilike('nombre_evaluado', evaluadoNombre.trim())
+                  .limit(1)
+                  .single();
+                if (evData?.codigo_evaluado) {
+                  evaluadoCodigo = String(evData.codigo_evaluado);
+                }
+              } catch (e) {
+                console.warn('Aviso: no se pudo resolver codigo_evaluado desde evaluators', e);
+              }
+            }
+
+            // Si no tiene código, buscarlo en la tabla evaluators por nombre
+            if (!evaluadoCodigo && evaluadoNombre) {
+              try {
+                const { data: evData } = await supabase
+                  .from('evaluators')
+                  .select('codigo_evaluado')
+                  .ilike('nombre_evaluado', evaluadoNombre.trim())
+                  .limit(1)
+                  .single();
+                if (evData?.codigo_evaluado) {
+                  evaluadoCodigo = String(evData.codigo_evaluado);
+                }
+              } catch (e) {
+                console.warn('Aviso: no se pudo resolver codigo_evaluado desde evaluators', e);
+              }
+            }
           }
         }
       } catch (e) {
@@ -188,7 +337,35 @@ export default function FormularioPublicPage() {
 
       const raw = localStorage.getItem('form_responses') || '[]';
       const arr = JSON.parse(raw);
-      const responseData: any = { id, createdAt: new Date().toISOString(), responses, token, evaluatorName };
+
+      // Map internal keys (comp-#, est-#) to affirmation `codigo` when available
+      const mappedResponses: Record<string, any> = {};
+      try {
+        // build flat array of questions in the same order as rendered: competencias then estilos
+        const flatItems: any[] = [];
+        (grouped.competencias || []).forEach((it: any) => flatItems.push(it));
+        (grouped.estilos || []).forEach((it: any) => flatItems.push(it));
+
+        Object.keys(responses || {}).forEach((k) => {
+          // keys are like 'comp-0' or 'est-1' or 'est-0' or custom keys
+          const m = k.match(/^(?:comp|est)-(\d+)$/);
+          if (m) {
+            const idx = parseInt(m[1], 10);
+            const item = flatItems[idx];
+            const code = item && (item.codigo || item.code || item.codigo_val || item.id) ? (item.codigo || item.code || item.codigo_val || item.id) : null;
+            if (code) mappedResponses[String(code)] = responses[k];
+            else mappedResponses[k] = responses[k];
+          } else {
+            // keep original key if not matching pattern
+            mappedResponses[k] = responses[k];
+          }
+        });
+      } catch (e) {
+        // fallback: use raw responses
+        Object.assign(mappedResponses, responses);
+      }
+
+      const responseData: any = { id, createdAt: new Date().toISOString(), responses: mappedResponses, token, evaluatorName };
       if (evaluadoNombre) responseData.evaluadoNombre = evaluadoNombre;
       if (evaluadoCodigo) responseData.evaluadoCodigo = evaluadoCodigo;
       arr.push(responseData);
@@ -196,12 +373,14 @@ export default function FormularioPublicPage() {
       console.log('✅ Respuestas guardadas en localStorage:', responseData);
 
       // Actualizar estado en Supabase si está disponible — incluir evaluado info dentro de responses para persistencia
+      let updateOk = false;
+      let insertOk = false;
       try {
-        const payloadResponses = { ...responses } as any;
+        const payloadResponses = { ...mappedResponses } as any;
         if (evaluadoNombre) payloadResponses.evaluado_nombre = evaluadoNombre;
         if (evaluadoCodigo) payloadResponses.evaluado_codigo = evaluadoCodigo;
 
-        const { error } = await fetch('/api/update-submission-status', {
+        const updateRes = await fetch('/api/update-submission-status', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -210,16 +389,21 @@ export default function FormularioPublicPage() {
             completedAt: new Date().toISOString(),
             responses: payloadResponses
           })
-        }).then(r => r.json());
-
-        if (error) console.warn('Aviso: No se pudo actualizar estado en Supabase', error);
+        });
+        const updateJson = await updateRes.json().catch(() => ({}));
+        if (updateRes.ok && updateJson && updateJson.success) {
+          updateOk = true;
+          console.log('✅ update-submission-status OK');
+        } else {
+          console.warn('Aviso: No se pudo actualizar estado en Supabase', updateJson.error || updateJson);
+        }
       } catch (e) {
         console.warn('Aviso: Error actualizando Supabase:', e);
       }
 
       // Además, intentar insertar cada envío en `form_responses` (no destructivo)
       try {
-        await fetch('/api/insert-response', {
+        const insRes = await fetch('/api/insert-response', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -227,21 +411,48 @@ export default function FormularioPublicPage() {
             evaluatorName,
             evaluadoNombre,
             evaluadoCodigo,
-            responses
+            responses: mappedResponses
           })
-        }).then(res => res.json()).then((r) => {
-          if (r && r.error) console.warn('Aviso: insert-response API retornó error:', r.error);
-          else console.log('✅ Insert-response API result:', r);
-        }).catch(err => console.warn('Aviso: error calling insert-response API', err));
+        });
+        const insJson = await insRes.json().catch(() => ({}));
+        if (insRes.ok && insJson && insJson.success) {
+          insertOk = true;
+          console.log('✅ insert-response OK');
+        } else {
+          console.warn('Aviso: insert-response API retornó error:', insJson.error || insJson);
+        }
       } catch (e) {
         console.warn('Aviso: Error llamando a insert-response API', e);
       }
 
-      // Limpiar respuestas guardadas y resetear formulario después de envío exitoso
+      // Limpiar respuestas guardadas y resetear formulario después
       localStorage.removeItem(`form_responses_${token}`);
       setResponses({});
+
+      // Mostrar modal de éxito y cerrar automáticamente, redirigir y bloquear el link localmente
       setShowSuccessModal(true);
-      setTimeout(() => setShowSuccessModal(false), 3000);
+      setTimeout(() => {
+        setShowSuccessModal(false);
+        // Redirigir a una página de cierre para evitar mostrar el login en la raíz
+        try {
+          router.replace('/formulario/closed');
+        } catch (e) {
+          // fallback: window.location
+          window.location.href = '/formulario/closed';
+        }
+      }, 1800);
+
+      // Si ambas llamadas fallaron, dejar registro local para diagnóstico y avisar al usuario
+      if (!updateOk && !insertOk) {
+        // Guardar copia en localStorage para reintento o inspección
+        const pending = JSON.parse(localStorage.getItem('pending_form_responses') || '[]');
+        pending.push(responseData);
+        localStorage.setItem('pending_form_responses', JSON.stringify(pending));
+        console.warn('⚠️ Ambas APIs fallaron, guardado en pending_form_responses para reintento manual');
+        // notificar al usuario
+        setError('Hubo un problema guardando las respuestas en el servidor; se guardaron localmente y se reintentarán luego.');
+        setTimeout(() => setError(null), 8000);
+      }
     } catch (e) {
       console.error('❌ Error guardando respuestas:', e);
       setError('Error guardando respuestas');
@@ -258,9 +469,34 @@ export default function FormularioPublicPage() {
           {/* Header + scale (sticky) */}
           <div style={{ marginBottom: 16 }}>
             <div ref={headerRef} style={{ position: 'sticky', top: 0, zIndex: 60, background: '#f8f9ff', padding: '16px 28px', border: '1px solid rgba(79, 70, 229, 0.1)', borderRadius: 10, margin: '-28px -28px 12px -28px', boxShadow: '0 6px 18px rgba(2,6,23,0.06)' }}>
-              <div style={{ marginBottom: 8 }}>
-                <h1 style={{ fontSize: 32, fontWeight: 700, color: '#0F172A', margin: '0 0 6px 0', letterSpacing: '0.5px' }}>Formulario de evaluación</h1>
-                <p style={{ fontSize: 14, color: '#64748b', margin: 0, fontWeight: 500 }}>Evaluado: <span style={{ color: '#0F172A', fontWeight: 700 }}>{evaluadoName || evaluatorName || 'Nombre no disponible'}</span></p>
+              <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <h1 style={{ fontSize: 32, fontWeight: 700, color: '#0F172A', margin: '0 0 6px 0', letterSpacing: '0.5px' }}>Formulario de evaluación</h1>
+                  <p style={{ fontSize: 14, color: '#64748b', margin: 0, fontWeight: 500 }}>Evaluado: <span style={{ color: '#0F172A', fontWeight: 700 }}>{evaluadoName || evaluatorName || 'Nombre no disponible'}</span></p>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                  <button
+                    onClick={saveProgress}
+                    disabled={!isDirty}
+                    style={{
+                      padding: '12px 24px',
+                      background: !isDirty ? '#ccc' : 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: 6,
+                      cursor: isDirty ? 'pointer' : 'not-allowed',
+                      fontWeight: 600,
+                      fontSize: 14,
+                      boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)',
+                      transition: 'all 0.3s',
+                    }}
+                  >
+                    {isDirty ? 'Guardar progreso' : 'Guardado'}
+                  </button>
+                  <div style={{ marginTop: 6, fontSize: 12, color: '#374151' }}>
+                    {draftSavedAt ? `Último guardado: ${new Date(draftSavedAt).toLocaleString()}` : 'No guardado aún'}
+                  </div>
+                </div>
               </div>
 
               {instrucciones.length === 0 ? (
@@ -432,9 +668,9 @@ export default function FormularioPublicPage() {
                 </div>
               )}
 
-              <div style={{ borderTop: '1px solid rgba(15,23,42,0.06)', paddingTop: 20, display: 'flex', justifyContent: 'flex-end' }}>
+              <div style={{ borderTop: '1px solid rgba(15,23,42,0.06)', paddingTop: 20, display: 'flex', justifyContent: 'flex-end', gap: 12, alignItems: 'center' }}>
                 <button
-                  onClick={submit}
+                  onClick={() => setShowConfirmModal(true)}
                   disabled={loading}
                   style={{
                     padding: '12px 48px',
@@ -499,6 +735,66 @@ export default function FormularioPublicPage() {
             >
               Cerrar
             </button>
+          </div>
+        </div>
+      )}
+      {showConfirmModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: 12,
+            padding: '28px 24px',
+            maxWidth: 480,
+            textAlign: 'center',
+            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15)'
+          }}>
+            <h2 style={{ fontSize: 20, fontWeight: 700, color: '#0F172A', margin: '0 0 12px 0' }}>¿Estás seguro?</h2>
+            <p style={{ fontSize: 14, color: '#64748b', margin: '0 0 20px 0' }}>Una vez enviado, no podrás editar la evaluación. ¿Deseas continuar?</p>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 12 }}>
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                style={{
+                  padding: '10px 20px',
+                  background: 'white',
+                  color: '#374151',
+                  border: '1px solid rgba(15,23,42,0.08)',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  fontSize: 14
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => { setShowConfirmModal(false); submit(); }}
+                disabled={loading}
+                style={{
+                  padding: '10px 24px',
+                  background: loading ? '#ccc' : 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 6,
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  fontWeight: 600,
+                  fontSize: 14,
+                  boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)'
+                }}
+              >
+                {loading ? 'Enviando...' : 'Enviar'}
+              </button>
+            </div>
           </div>
         </div>
       )}

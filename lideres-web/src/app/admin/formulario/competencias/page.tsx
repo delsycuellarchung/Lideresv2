@@ -3,6 +3,7 @@
 import React from "react";
 import dynamic from 'next/dynamic';
 const DraggableModal = dynamic(() => import('@/components/DraggableModal'), { ssr: false });
+import { saveFormulario } from '@/lib/formularioClient';
 
 export default function CompetenciasPage() {
   const [items, setItems] = React.useState<string[]>([]);
@@ -11,22 +12,20 @@ export default function CompetenciasPage() {
   const [editIndex, setEditIndex] = React.useState<number | null>(null);
 
   React.useEffect(() => {
-    try {
-      const raw = localStorage.getItem('formulario_competencias');
-      if (raw) {
-        const parsed = JSON.parse(raw) || [];
-        const normalized = (parsed || []).map((it: any) => {
-          if (typeof it === 'string') return it;
-          if (it && typeof it === 'object') return String(it.nombre ?? it.codigo ?? it.label ?? JSON.stringify(it));
-          return String(it ?? '');
-        });
-        setItems(normalized);
+    (async () => { try {
+      const res = await fetch('/api/formulario');
+      if (res.ok) {
+        const json = await res.json();
+        if (Array.isArray(json.competencias) && json.competencias.length > 0) {
+          setItems(json.competencias.map((it: any) => typeof it === 'string' ? it : String(it.nombre ?? it)));
+        }
       }
-    } catch (e) { console.warn(e); }
+    } catch (e) { console.warn(e); } })();
   }, []);
 
   const persist = (next: string[]) => {
     try { localStorage.setItem('formulario_competencias', JSON.stringify(next)); } catch (e) { console.warn(e); }
+    try { saveFormulario({ competencias: next }); } catch (e) { console.warn(e); }
   };
 
   const openCreate = () => {

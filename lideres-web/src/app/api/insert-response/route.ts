@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabaseClient';
+import { supabase as clientSupabase } from '@/lib/supabaseClient';
+import { createClient } from '@supabase/supabase-js';
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,9 +13,22 @@ export async function POST(request: NextRequest) {
 
     const disableDb = String(process.env.NEXT_PUBLIC_DISABLE_DB || process.env.DISABLE_DB || '').toLowerCase() === 'true';
 
-    if (!supabase || disableDb) {
-      // DB disabled — return success so client can continue using localStorage fallback
-      return NextResponse.json({ success: true, id: `local_${Date.now()}`, message: 'DB disabled; not persisted server-side' });
+    if (disableDb) {
+      return NextResponse.json({ success: true, id: `local_${Date.now()}`, message: 'DB disabled via env; not persisted server-side' });
+    }
+
+    // Ensure we have a server-side Supabase client. Prefer imported client, otherwise try to create one with service key.
+    let supabase = clientSupabase as any;
+    if (!supabase) {
+      const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const key = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE || process.env.SUPABASE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      if (url && key) {
+        supabase = createClient(url, key);
+      }
+    }
+
+    if (!supabase) {
+      return NextResponse.json({ error: 'No Supabase client available on server' }, { status: 500 });
     }
 
     const payload: any = {

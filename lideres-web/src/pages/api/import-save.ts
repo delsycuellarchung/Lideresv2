@@ -47,51 +47,100 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (typeof r !== 'object' || Array.isArray(r)) return res.status(400).json({ error: 'Each row must be an object' });
     }
 
-    // Try inserting; if error mentions missing column(s) retry after removing them
-    const tryInsert = async (inputRows: any[]) => {
-      const { data, error } = await client.from('evaluators').insert(inputRows);
-      return { data, error };
-    };
-
-    // Ensure created_by is present for RLS and auditing
-    let attemptRows: Record<string, any>[] = rows.map((r: Record<string, any>) => ({ created_by: authUserId, ...r }));
-    let removedColumns: string[] = [];
-
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const { data, error } = await tryInsert(attemptRows);
-      if (!error) {
-        return res.status(200).json({ success: true, inserted: Array.isArray(data) ? (data as any).length : 0, removedColumns });
+    // Upsert behavior: update existing evaluator rows (match by codigo_evaluado or correo_evaluado), insert new ones
+    // Check whether the `created_by` column exists in `evaluators` table.
+    // Some deployments may not have this column; avoid referencing it if missing.
+    let supportsCreatedBy = true;
+    try {
+      // Try a harmless select for the column to see if schema knows about it.
+      // We limit to 1 row to keep it cheap. Supabase client returns { data, error }.
+      const { data: testData, error: testErr } = await client.from('evaluators').select('created_by').limit(1);
+      if (testErr) {
+        // If Supabase returns an error (for example schema cache missing the column), treat as unsupported.
+        console.warn('/api/import-save: created_by column check returned error, skipping created_by injection', testErr?.message || testErr);
+        supportsCreatedBy = false;
       }
-
-      const msg = (error.message || '').toString();
-      console.error('/api/import-save supabase insert error', msg);
-
-      // Detect column not found messages like: Could not find the 'regional_evaluado' column of 'evaluators' in the schema cache
-      const missingCols: string[] = [];
-      const re = /'([a-zA-Z0-9_]+)' column of 'evaluators'|Could not find the '([a-zA-Z0-9_]+)' column/gi;
-      let m: RegExpExecArray | null;
-      while ((m = re.exec(msg)) !== null) {
-        const col = m[1] || m[2];
-        if (col) missingCols.push(col);
-      }
-
-      if (missingCols.length === 0) {
-        // no recognisable missing-column info, return the original error
-        return res.status(500).json({ error: msg });
-      }
-
-      // Remove missing columns from rows and retry
-      removedColumns = Array.from(new Set([...removedColumns, ...missingCols]));
-      attemptRows = attemptRows.map((r: Record<string, any>) => {
-        const out: Record<string, any> = {};
-        for (const k of Object.keys(r)) {
-          if (!missingCols.includes(k)) out[k] = r[k];
-        }
-        return out;
-      });
+      // If no error, assume column exists (even if testData is empty).
+    } catch (e) {
+      console.warn('/api/import-save: created_by column not present (exception), skipping created_by injection', e);
+      supportsCreatedBy = false;
     }
 
-    return res.status(500).json({ error: 'Insertion failed after retrying without missing columns', removedColumns });
+    // Ensure created_by is present for RLS and auditing when supported
+    const preparedRows: Record<string, any>[] = rows.map((r: Record<string, any>) => (supportsCreatedBy ? ({ created_by: authUserId, ...r }) : ({ ...r })));
+
+    // Collect possible matching keys
+    const codes = Array.from(new Set(preparedRows.map(r => (r.codigo_evaluado || '').toString().trim()).filter(Boolean)));
+    const emails = Array.from(new Set(preparedRows.map(r => (r.correo_evaluado || '').toString().trim()).filter(Boolean)));
+
+    // Fetch existing records matching codes or emails
+    const existingMapByCode: Record<string, any> = {};
+    const existingMapByEmail: Record<string, any> = {};
+    try {
+      if (codes.length > 0) {
+        const { data: byCode } = await client.from('evaluators').select('id,codigo_evaluado,correo_evaluador,created_at').in('codigo_evaluado', codes);
+        for (const r of (byCode || [])) {
+          if (r.codigo_evaluado) existingMapByCode[String(r.codigo_evaluado)] = r;
+        }
+      }
+      if (emails.length > 0) {
+        const { data: byEmail } = await client.from('evaluators').select('id,codigo_evaluado,correo_evaluador,created_at').in('correo_evaluador', emails);
+        for (const r of (byEmail || [])) {
+          if (r.correo_evaluador) existingMapByEmail[String(r.correo_evaluador)] = r;
+        }
+      }
+    } catch (fetchErr) {
+      console.error('/api/import-save fetch existing error', fetchErr);
+      return res.status(500).json({ error: 'Error fetching existing evaluators', details: String(fetchErr?.message || fetchErr) });
+    }
+
+    const toInsert: Record<string, any>[] = [];
+    const toUpdate: { id: any; row: Record<string, any> }[] = [];
+
+    for (const r of preparedRows) {
+      const code = (r.codigo_evaluado || '').toString().trim();
+      const email = (r.correo_evaluado || '').toString().trim();
+      const existingByCode = code ? existingMapByCode[code] : null;
+      const existingByEmail = email ? existingMapByEmail[email] : null;
+
+      const match = existingByCode || existingByEmail;
+      if (match && match.id) {
+        // prepare update (do not overwrite created_at or id)
+        const upd = { ...r };
+        delete upd.id;
+        toUpdate.push({ id: match.id, row: upd });
+      } else {
+        toInsert.push(r);
+      }
+    }
+
+    let insertedCount = 0;
+    let updatedCount = 0;
+    try {
+      if (toInsert.length > 0) {
+        const { data: insData, error: insErr } = await client.from('evaluators').insert(toInsert).select('id');
+        if (insErr) {
+          console.error('/api/import-save insert error', insErr);
+          return res.status(500).json({ error: insErr.message || insErr });
+        }
+        insertedCount = Array.isArray(insData) ? insData.length : (insData ? 1 : 0);
+      }
+
+      // Update rows one by one (could be batched if needed)
+      for (const u of toUpdate) {
+        const { error: updErr } = await client.from('evaluators').update(u.row).eq('id', u.id);
+        if (updErr) {
+          console.warn('/api/import-save update warning for id', u.id, updErr.message || updErr);
+        } else {
+          updatedCount += 1;
+        }
+      }
+    } catch (dbErr) {
+      console.error('/api/import-save DB operation error', dbErr);
+      return res.status(500).json({ error: 'Error saving import data', details: String(dbErr?.message || dbErr) });
+    }
+
+    return res.status(200).json({ success: true, inserted: insertedCount, updated: updatedCount });
   } catch (err: unknown) {
     console.error('/api/import-save exception', err);
     return res.status(500).json({ error: err instanceof Error ? err.message : String(err) });

@@ -37,9 +37,7 @@ export const GeneralDonut: React.FC<GeneralDonutProps> = ({ value, label, color 
             transform={`rotate(-90)`}
             filter="url(#shadow)"
           />
-          <text x="0" y="6" textAnchor="middle" fontSize="14" fontWeight={700} fill="#111827">
-            {value !== null ? value.toFixed(2) : '--'}
-          </text>
+          {/* numeric label intentionally removed per UX request */}
         </g>
       </svg>
       <div style={{ fontSize: 13, fontWeight: 700, color: '#64748b', marginTop: 6, textAlign: 'center' }}>{label}</div>

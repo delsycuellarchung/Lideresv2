@@ -29,15 +29,53 @@ export async function POST(request: NextRequest) {
       try {
         const formToken = uuidv4();
         const email = evaluator.correo || evaluator.correo_evaluador || evaluator.email || null;
-        const name = (evaluator.nombre_evaluador || evaluator.nombre || evaluator.nombreEvaluador || evaluator.nombre_evaluador_alt || '').toString().trim();
-        const evaluadoName = (evaluator.nombre_evaluado || evaluator.nombre_alt || evaluator.nombreEvaluado || 'N/A').toString();
+        let evaluatorNameResolved = (evaluator.nombre_evaluador || evaluator.nombre || evaluator.nombreEvaluador || evaluator.nombre_evaluador_alt || '').toString().trim();
+        const evaluadoName = (evaluator.nombre_evaluado || evaluator.nombre_alt || evaluator.nombreEvaluado || evaluator.nombreEvaluado || 'N/A').toString();
+        let evaluadoCodigo = evaluator.codigo_evaluado || evaluator.codigo || evaluator.codigoEvaluado || evaluator.evaluado_codigo || evaluator.evaluadoCodigo || null;
+        // If not provided, try best-effort lookup by evaluadoName in personas table
+        if (!evaluadoCodigo && supabase) {
+          try {
+            const nameKey = evaluadoName || evaluator.nombre_evaluado || evaluator.nombre;
+            if (nameKey) {
+              const { data: personaData, error: personaErr } = await supabase.from('personas').select('codigo').ilike('nombre', `%${String(nameKey).split(' ').slice(0,3).join('%')}%`).limit(1).single();
+              if (!personaErr && personaData && personaData.codigo) evaluadoCodigo = personaData.codigo;
+            }
+          } catch (lookupErr) {
+            // ignore lookup errors
+          }
+        }
+
+        // If name not provided, try to resolve full name from DB by email
+        if ((!evaluatorNameResolved || String(evaluatorNameResolved).trim() === '') && email && supabase) {
+          try {
+            const emailKey = String(email).toLowerCase();
+            // Try evaluators table first
+            const { data: evData } = await supabase.from('evaluators').select('nombre_evaluador,nombre,correo_evaluador,correo').or(`correo_evaluador.eq.${emailKey},correo.eq.${emailKey}`).limit(1);
+            if (Array.isArray(evData) && evData.length > 0) {
+              const cand = evData[0] as any;
+              evaluatorNameResolved = (cand.nombre_evaluador || cand.nombre || evaluatorNameResolved || '').toString().trim();
+            } else {
+              // fallback to personas table
+              try {
+                const { data: pData } = await supabase.from('personas').select('nombre,correo').ilike('correo', `%${emailKey}%`).limit(1);
+                if (Array.isArray(pData) && pData.length > 0) {
+                  const cand2 = pData[0] as any;
+                  evaluatorNameResolved = (cand2.nombre || evaluatorNameResolved || '').toString().trim();
+                }
+              } catch (e) {}
+            }
+          } catch (e) {
+            // ignore lookup errors
+            console.warn('Name lookup by email failed', e);
+          }
+        }
 
         // Valida si existe el correo
         if (!email || String(email).trim() === '') {
           failureCount++;
           results.push({
             success: false,
-            evaluador: name,
+            evaluador: evaluatorNameResolved,
             correo: null,
             evaluando: evaluadoName,
             error: 'No tiene correo asignado',
@@ -50,7 +88,7 @@ export async function POST(request: NextRequest) {
           try {
             console.log(`📧 [API] Enviando email a ${email} para ${evaluadoName}`);
             await sendFormEmail({
-              evaluatorName: name || '',
+              evaluatorName: evaluatorNameResolved || '',
               evaluatorEmail: email,
               evaluadoName: evaluadoName,
               evaluadoCargo: evaluator.cargo_evaluado || null,
@@ -64,7 +102,7 @@ export async function POST(request: NextRequest) {
             failureCount++;
             results.push({
               success: false,
-              evaluador: name,
+              evaluador: evaluatorNameResolved,
               correo: email,
               evaluando: evaluadoName,
               error: `Error enviando email: ${emailError.message}`,
@@ -76,12 +114,12 @@ export async function POST(request: NextRequest) {
         }
         if (supabase) {
           try {
-            await supabase
+            const { data: insertData, error: insertError } = await supabase
               .from('form_submissions')
               .insert({
                 token: formToken,
                 evaluator_email: email,
-                evaluator_name: name,
+                evaluator_name: evaluatorNameResolved,
                 form_data: formData || {},
                 responses: {
                   evaluado_nombre: evaluadoName,
@@ -89,17 +127,43 @@ export async function POST(request: NextRequest) {
                   evaluado_area: evaluator.area_evaluado || null,
                   evaluador_area: evaluator.area_evaluador || null,
                 },
+                evaluado_codigo: evaluadoCodigo || null,
                 status: 'pending',
+              })
+              .select('token')
+              .single();
+
+            if (insertError) {
+              console.warn(`DB save error for ${email}:`, insertError.message || insertError);
+              failureCount++;
+              results.push({
+                success: false,
+                evaluador: evaluatorNameResolved,
+                correo: email,
+                evaluando: evaluadoName,
+                error: `DB save error: ${insertError.message || JSON.stringify(insertError)}`,
               });
+              continue; // skip counting as success since DB did not persist
+            }
           } catch (dbError: any) {
-            console.warn(`DB save error for ${email}:`, dbError.message);
+            console.warn(`DB exception for ${email}:`, dbError && dbError.message ? dbError.message : dbError);
+            failureCount++;
+            results.push({
+              success: false,
+              evaluador: evaluatorNameResolved,
+              correo: email,
+              evaluando: evaluadoName,
+              error: `DB exception: ${dbError?.message || String(dbError)}`,
+            });
+            continue;
           }
         }
 
+        // Only mark as success when both email (if enabled) and DB persistence succeeded
         successCount++;
         results.push({
           success: true,
-          evaluador: name,
+          evaluador: evaluatorNameResolved,
           correo: email,
           evaluando: evaluadoName,
           token: formToken,
