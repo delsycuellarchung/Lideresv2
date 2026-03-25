@@ -175,7 +175,7 @@ export default function FormularioPublicPage() {
     return () => window.removeEventListener('beforeunload', handler);
   }, [isDirty]);
 
-  const determineTipoCategory = (tipoVal?: string | null) => {
+  const determineTipoCategory = (tipoVal?: string | null, categoria?: string | null) => {
     if (!tipoVal) return 'unknown';
     if (tipoVal.toLowerCase().includes('estilo')) return 'estilo';
     return 'competencia';

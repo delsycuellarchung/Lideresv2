@@ -33,7 +33,7 @@ export async function saveFormulario(payload: {
       console.warn('saveFormulario: server persist failed', e);
     }
   } catch (err) {
-    // eslint-disable-next-line no-console
+    // eslint-disable-next-line no-consoleafirmaciones:
     console.warn('saveFormulario error', err);
   }
 }

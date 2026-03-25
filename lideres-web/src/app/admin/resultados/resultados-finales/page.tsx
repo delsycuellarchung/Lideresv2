@@ -12,17 +12,41 @@ export default function ResultadosFinalesPage() {
     return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
   };
 
-      React.useEffect(() => {
+React.useEffect(() => {
         if (typeof window === 'undefined') return;
 
         let mounted = true;
         const load = async (allResponsesFromServer?: any[]) => {
           try {
             const allResponses = Array.isArray(allResponsesFromServer) ? allResponsesFromServer : JSON.parse(window.localStorage.getItem('form_responses') || '[]') || [];
-      const rawA = window.localStorage.getItem('formulario_afirmaciones') || '[]';
-      const afirmaciones = JSON.parse(rawA) || [];
-      const rawEst = window.localStorage.getItem('formulario_estilos') || '[]';
-      const estilosRaw = JSON.parse(rawEst) || [];
+      let afirmaciones: any[] = [];
+      try {
+        const fRes = await fetch('/api/formulario');
+        if (fRes.ok) {
+          const fJson = await fRes.json();
+          if (Array.isArray(fJson.afirmaciones) && fJson.afirmaciones.length > 0) {
+            afirmaciones = fJson.afirmaciones;
+          }
+        }
+      } catch {}
+      if (!afirmaciones.length) {
+        try {
+          const rawA = window.localStorage.getItem('formulario_afirmaciones') || '[]';
+          afirmaciones = JSON.parse(rawA) || [];
+        } catch {}
+      }
+      let estilosRaw: any[] = [];
+      try {
+        const estFromApi = afirmaciones?.filter((a: any) => a.categoria === 'estilo').map((a: any) => a.tipo);
+        const uniqueEstilos = [...new Set(estFromApi || [])];
+        if (uniqueEstilos.length) estilosRaw = uniqueEstilos;
+      } catch {}
+      if (!estilosRaw.length) {
+        try {
+          const rawEst = window.localStorage.getItem('formulario_estilos') || '[]';
+          estilosRaw = JSON.parse(rawEst) || [];
+        } catch {}
+      }
       const estilosArr: string[] = Array.isArray(estilosRaw) ? estilosRaw.map((s: any) => (typeof s === 'string' ? s : (s && s.nombre ? String(s.nombre) : String(s)))) : [];
       const affByCode: Record<string, any> = {};
       afirmaciones.forEach((a: any) => { if (a.codigo) affByCode[String(a.codigo)] = a; });
@@ -47,7 +71,6 @@ export default function ResultadosFinalesPage() {
 
         }
       });
-
       const estilosByLabel: Record<string, string[]> = {};
       estilosArr.forEach((label: string) => { estilosByLabel[label] = []; });
       Object.values(affByCode).forEach((a: any) => {
@@ -405,6 +428,9 @@ export default function ResultadosFinalesPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 8 }}>
         <div style={{ flex: 1 }} />
         <div style={{ display: 'flex', gap: 8 }}>
+          <button title="Descargar PDF" className="btn-press icon-btn" style={{ padding: '8px 12px', fontSize: 14 }}>
+            <img src="/images/descargar.png" alt="PDF" style={{ width: 18, height: 18, marginRight: 8 }} />PDF
+          </button>
           <button className="btn-press icon-btn" onClick={handleExport} style={{ padding: '8px 12px', fontSize: 14 }}>
             <img src="/images/descargar.png" alt="Exportar" style={{ width: 18, height: 18, marginRight: 8 }} />Exportar
           </button>
@@ -432,7 +458,14 @@ export default function ResultadosFinalesPage() {
                 <td style={{ padding: '6px 8px', textAlign: 'center', width: 90, maxWidth: 90, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: 'monospace', fontWeight: 700 }}>{row.codigo || '-'}</td>
                 <td title={String(row.nombre)} style={{ padding: '10px 12px', color: '#111827', whiteSpace: 'normal', wordBreak: 'break-word', maxWidth: 560 }}>{row.nombre}</td>
                 <td style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>{row.fecha}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'center' }}><span style={{ background: row.evaluadores <= 2 ? '#fee2e2' : '#eef2ff', color: row.evaluadores <= 2 ? '#dc2626' : '#0b5394', padding: '6px 8px', borderRadius: 8 }}>{row.evaluadores}</span></td>
+                <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ background: row.evaluadores <= 2 ? '#fee2e2' : '#eef2ff', color: row.evaluadores <= 2 ? '#dc2626' : '#0b5394', padding: '6px 8px', borderRadius: 8 }}>{row.evaluadores}</span>
+                    <button title="Descargar PDF" style={{ padding: '6px 8px', fontSize: 12, borderRadius: 6, border: '1px solid rgba(15,23,42,0.06)', background: '#fff', cursor: 'default' }}>
+                      <img src="/images/descargar.png" alt="PDF" style={{ width: 14, height: 14, display: 'inline-block', verticalAlign: 'middle', marginRight: 6 }} />PDF
+                    </button>
+                  </div>
+                </td>
                 <td style={{ padding: '10px 12px', textAlign: 'center' }}><span style={{ display: 'inline-block', minWidth: 48, padding: '6px 8px', borderRadius: 8, background: typeof row.comunicacion === 'number' ? getAvgColor(row.comunicacion) : 'transparent' }}>{row.comunicacion}</span></td>
                 <td style={{ padding: '10px 12px', textAlign: 'center' }}><span style={{ display: 'inline-block', minWidth: 48, padding: '6px 8px', borderRadius: 8, background: typeof row.respeto === 'number' ? getAvgColor(row.respeto) : 'transparent' }}>{row.respeto}</span></td>
                 <td style={{ padding: '10px 12px', textAlign: 'center' }}><span style={{ display: 'inline-block', minWidth: 48, padding: '6px 8px', borderRadius: 8, background: typeof row.desarrollo === 'number' ? getAvgColor(row.desarrollo) : 'transparent' }}>{row.desarrollo}</span></td>
@@ -473,7 +506,14 @@ export default function ResultadosFinalesPage() {
                 <td style={{ ...styles.td, whiteSpace: 'nowrap', width: 90, maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: 'monospace', fontWeight: 700 }}>{row.codigo || '-'}</td>
                 <td style={styles.nameTd} title={String(row.nombre)}>{row.nombre}</td>
                 <td style={{ ...styles.td, whiteSpace: 'nowrap' }}>{row.fecha}</td>
-                <td style={styles.td}><span style={{ ...styles.badge, background: row.evaluadores <= 2 ? '#fee2e2' : '#eef2ff', color: row.evaluadores <= 2 ? '#dc2626' : '#0b5394' }}>{row.evaluadores}</span></td>
+                <td style={styles.td}>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ ...styles.badge, background: row.evaluadores <= 2 ? '#fee2e2' : '#eef2ff', color: row.evaluadores <= 2 ? '#dc2626' : '#0b5394' }}>{row.evaluadores}</span>
+                    <button title="Descargar PDF" style={{ padding: '6px 8px', fontSize: 12, borderRadius: 6, border: '1px solid rgba(15,23,42,0.06)', background: '#fff', cursor: 'default' }}>
+                      <img src="/images/descargar.png" alt="PDF" style={{ width: 14, height: 14, display: 'inline-block', verticalAlign: 'middle', marginRight: 6 }} />PDF
+                    </button>
+                  </div>
+                </td>
                 {estilosCols && estilosCols.length ? (
                   estilosCols.map(label => (
                     <td key={label} style={styles.td}><span style={styles.avgBadge(row.estilos ? row.estilos[label] : null)}>{(row.estilos && row.estilos[label] != null) ? row.estilos[label] : '-'}</span></td>

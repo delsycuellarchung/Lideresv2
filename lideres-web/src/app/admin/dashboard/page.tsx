@@ -15,7 +15,6 @@ export default function DashboardPage() {
     evaluados: 0,
   });
 
-  // Al montar el componente, cargamos las estadísticas.
   useEffect(() => {
     cargarEstadisticas();
   }, []);

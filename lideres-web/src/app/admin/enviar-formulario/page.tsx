@@ -113,6 +113,8 @@ export default function EnviarFormularioPage() {
     }
   };
 
+  
+
   const handleSelectEvaluator = (id: string) => {
     setSelectedEvaluators((prev) =>
       prev.includes(id) ? prev.filter((e) => e !== id) : [...prev, id]
@@ -318,10 +320,13 @@ export default function EnviarFormularioPage() {
             </div>
           </div>
 
+          
+
           <div style={{ maxHeight: 420, overflowY: 'auto', borderRadius: 8, border: '1px solid rgba(99,102,241,0.06)', background: '#fff', padding: 8 }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ textAlign: 'left', borderBottom: '1px solid rgba(15,23,42,0.06)' }}>
+                  <th style={{ padding: '8px 6px', width: 40 }}></th>
                   <th style={{ padding: '8px 6px', width: 60 }}>#</th>
                   <th style={{ padding: '8px 6px' }}>Evaluador</th>
                   <th style={{ padding: '8px 6px', width: 220 }}>Correo</th>
@@ -331,6 +336,15 @@ export default function EnviarFormularioPage() {
               <tbody>
                 {evaluators.map((ev: any, i: number) => (
                   <tr key={ev.id} style={{ borderBottom: '1px solid rgba(15,23,42,0.03)' }}>
+                    <td style={{ padding: '8px 6px', verticalAlign: 'middle' }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedEvaluators.includes(ev.id)}
+                        onChange={() => handleSelectEvaluator(ev.id)}
+                        disabled={!(ev.correo || ev.correo_evaluador)}
+                        style={{ cursor: (ev.correo || ev.correo_evaluador) ? 'pointer' : 'not-allowed', width: 16, height: 16 }}
+                      />
+                    </td>
                     <td style={{ padding: '8px 6px', color: '#4b5563' }}>{String(ev.row_index ?? i)}</td>
                     <td style={{ padding: '8px 6px', color: '#0f172a', fontWeight: 600 }}>{ev.nombre_evaluador || ev.nombre}</td>
                     <td style={{ padding: '8px 6px', color: ev.correo ? '#065f46' : '#b91c1c' }}>{ev.correo || ev.correo_evaluador || '-'}</td>

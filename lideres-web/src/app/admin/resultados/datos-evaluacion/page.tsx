@@ -259,14 +259,12 @@ export default function DatosEvaluacionPage() {
       const avgByCode: Record<string, number | null> = {};
       const allValues: number[] = [];
 
-      Object.keys(respObj).forEach((k, keyIdx) => {
+      Object.keys(respObj).forEach((k) => {
         const raw = respObj[k];
         const n = mapLabelToNumeric(raw);
         if (typeof n === 'number' && !isNaN(n)) {
           allValues.push(n);
-          const aff = visibleAfirmaciones[keyIdx];
-          const affCode = aff?.codigo || k;
-          avgByCode[affCode] = n;
+          avgByCode[k] = n;
         }
       });
 
@@ -307,7 +305,7 @@ export default function DatosEvaluacionPage() {
         const rr: any = r as any;
         const code = String(rr.displayEvaluadoCodigo || rr.evaluadoCodigo || rr.evaluado_codigo || rr.evaluado || rr.token || '');
         const count = evaluadoresByEvaluado[code] ? evaluadoresByEvaluado[code].size : 0;
-        return count > 3; // only include evaluated with more than 3 evaluators
+        return count > 3; // solo descarga evaluados con más de 3 evaluadores
       });
 
       const dataRows = filteredResponses.map(r => {
@@ -458,7 +456,10 @@ export default function DatosEvaluacionPage() {
                   <td style={{ padding: '12px 14px', width: 140 }}>{row.fecha || ''}</td>
                   
                   {visibleAfirmaciones.map((a: Afirm, i: number) => {
-                    const val = (row as any).avgByCode?.[a.codigo || ''] ?? null;
+                    const compIdx = afirmaciones.filter(x => x.categoria === 'competencia' && x.codigo).indexOf(a);
+                    const estIdx = afirmaciones.filter(x => x.categoria === 'estilo' && x.codigo).indexOf(a);
+                    const fallbackKey = a.categoria === 'estilo' ? `est-${estIdx}` : `comp-${compIdx}`;
+                    const val = (row as any).avgByCode?.[a.codigo || ''] ?? (row as any).avgByCode?.[fallbackKey] ?? null;
                     const isLow = typeof val === 'number' && val < 3;
                     return (
                       <td key={String(a.codigo || i)} style={{ padding: '8px 10px', minWidth: 90, textAlign: 'center' }}>

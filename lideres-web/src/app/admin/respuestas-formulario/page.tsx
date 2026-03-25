@@ -6,7 +6,11 @@ import { supabase } from '@/lib/supabaseClient';
 export default function RespuestasFormularioPage() {
   const [responses, setResponses] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [completedCount, setCompletedCount] = React.useState<number | null>(null);
+  const [pendingCount, setPendingCount] = React.useState<number | null>(null);
   const [filter, setFilter] = React.useState<'all' | 'pending' | 'completed'>('all');
+  // quick-toggle: ocultar la lista en la UI sin tocar la BD (set true para ocultar)
+  const hideList = false;
   
 
   React.useEffect(() => {
@@ -61,6 +65,19 @@ export default function RespuestasFormularioPage() {
 
       if (error) throw error;
       setResponses(data || []);
+      // update counters (visual only)
+      try {
+        if (supabase) {
+          const compRes = await supabase.from('form_submissions').select('id', { count: 'exact' }).eq('status', 'completed');
+          const pendRes = await supabase.from('form_submissions').select('id', { count: 'exact' }).eq('status', 'pending');
+          const comp = (compRes && (compRes as any).count) || 0;
+          const pend = (pendRes && (pendRes as any).count) || 0;
+          setCompletedCount(typeof comp === 'number' ? comp : 0);
+          setPendingCount(typeof pend === 'number' ? pend : 0);
+        }
+      } catch (e) {
+        console.warn('Error cargando contadores de envíos:', e);
+      }
     } catch (error) {
       console.error('Error loading responses:', error);
     } finally {
@@ -73,14 +90,15 @@ export default function RespuestasFormularioPage() {
   }, [filter]);
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('es-ES', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
+  return new Intl.DateTimeFormat('es-BO', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date(dateString));
+};
 
   const getFromRow = (row: any, keys: string[]) => {
     if (!row) return '';
@@ -278,10 +296,26 @@ export default function RespuestasFormularioPage() {
           ))}
         </div>
       </div>
+      {/* Counters visual only: completados / pendientes */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginBottom: 12 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div style={{ background: '#ecfdf5', color: '#065f46', padding: '8px 12px', borderRadius: 8, fontWeight: 700 }}>
+            {completedCount === null ? '—' : String(completedCount)}
+          </div>
+          <div style={{ fontSize: 13, color: '#065f46' }}>Respondieron</div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div style={{ background: '#fff1f2', color: '#991b1b', padding: '8px 12px', borderRadius: 8, fontWeight: 700 }}>
+            {pendingCount === null ? '—' : String(pendingCount)}
+          </div>
+          <div style={{ fontSize: 13, color: '#991b1b' }}>Pendientes</div>
+        </div>
+      </div>
 
       {loading ? (
         <div style={{ textAlign: 'center', padding: 32, color: 'rgba(15,23,42,0.6)' }}>Cargando respuestas...</div>
-      ) : displayedResponses.length === 0 ? (
+      ) : (hideList || displayedResponses.length === 0) ? (
         <div style={{ padding: 32, background: 'rgba(15,23,42,0.02)', borderRadius: 8, textAlign: 'center', color: 'rgba(15,23,42,0.6)' }}>
           No hay respuestas disponibles
         </div>
