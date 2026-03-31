@@ -256,6 +256,7 @@ export default function DatosEvaluacionPage() {
       }
 
       const respObj = rr.responses || {};
+      console.log('EVALUADO:', rr.evaluadoNombre, '| CLAVES:', Object.keys(respObj));
       const avgByCode: Record<string, number | null> = {};
       const allValues: number[] = [];
 
@@ -265,6 +266,8 @@ export default function DatosEvaluacionPage() {
         if (typeof n === 'number' && !isNaN(n)) {
           allValues.push(n);
           avgByCode[k] = n;
+          avgByCode[k.toUpperCase()] = n;
+          avgByCode[k.toLowerCase()] = n;
         }
       });
 

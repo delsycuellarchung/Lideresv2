@@ -343,21 +343,50 @@ React.useEffect(() => {
       const estilos = estilosCols || [];
 
       const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet('Resultados Finales');
 
-      // build headers
-      const headers = ['Cod', 'Evaluado', 'Fecha', 'Número de evaluadores', 'Comunicación y dirección', 'Respeto y confianza', 'Desarrollo de equipo y empowerment', 'Adaptabilidad y resiliencia', 'Motivación e influencia', 'Promedio'];
-      let headerCols = headers;
+      // Hoja Competencias
+      const competenciasSheet = workbook.addWorksheet('Competencias');
+      const competenciaCols = ['Comunicación y dirección', 'Respeto y confianza', 'Desarrollo de equipo y empowerment', 'Adaptabilidad y resiliencia', 'Motivación e influencia'];
+      const competenciasHeaders = ['Cod', 'Evaluado', 'Fecha', 'Número de evaluadores', ...competenciaCols, 'Promedio'];
+      competenciasSheet.columns = competenciasHeaders.map(h => ({ header: h, key: h, width: 18 }));
+      const compHeaderRow = competenciasSheet.getRow(1);
+      compHeaderRow.font = { bold: true, size: 12 };
+      compHeaderRow.alignment = { horizontal: 'center', vertical: 'middle' };
+
+      rows.forEach((r: any) => {
+        try {
+          const evaluadores = Number(r.evaluadores) || 0;
+          if (!(evaluadores > 3)) return;
+          const base: any[] = [];
+          base.push(r.codigo || '-');
+          base.push(r.nombre || '-');
+          base.push(r.fecha || '-');
+          base.push(evaluadores || '-');
+          base.push(r.comunicacion ?? '-');
+          base.push(r.respeto ?? '-');
+          base.push(r.desarrollo ?? '-');
+          base.push(r.adaptabilidad ?? '-');
+          base.push(r.motivacion ?? '-');
+          base.push(r.promedio ?? '-');
+          const row = competenciasSheet.addRow(base);
+          row.eachCell((cell) => {
+            if (cell.value === null || cell.value === undefined || (typeof cell.value === 'string' && String(cell.value).trim() === '')) cell.value = '-';
+            cell.alignment = { horizontal: 'center', vertical: 'middle' };
+          });
+        } catch (e) {}
+      });
+
+      // Hoja Estilos
+      const estilosSheet = workbook.addWorksheet('Estilos');
+      const estilosHeaders = ['Cod', 'Evaluado', 'Fecha', 'Número de evaluadores'];
       if (estilos && estilos.length) {
-        headerCols = ['Cod', 'Evaluado', 'Fecha', 'Número de evaluadores', ...estilos.map(s => String(s)), 'Promedio'];
+        estilosHeaders.push(...estilos.map(s => String(s)));
       }
-
-      worksheet.columns = headerCols.map(h => ({ header: h, key: h, width: 18 }));
-
-      const headerRow = worksheet.getRow(1);
-      headerRow.font = { bold: true, size: 12 };
-      headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
-
+      estilosHeaders.push('Promedio');
+      estilosSheet.columns = estilosHeaders.map(h => ({ header: h, key: h, width: 18 }));
+      const estHeaderRow = estilosSheet.getRow(1);
+      estHeaderRow.font = { bold: true, size: 12 };
+      estHeaderRow.alignment = { horizontal: 'center', vertical: 'middle' };
 
       rows.forEach((r: any) => {
         try {
@@ -369,20 +398,13 @@ React.useEffect(() => {
           base.push(r.fecha || '-');
           base.push(evaluadores || '-');
           if (estilos && estilos.length) {
-
             estilos.forEach((label: string) => {
-              const val = r.estilos && r.estilos[label] != null ? r.estilos[label] : '-';
+              const val = r.estilos && (r.estilos[label] != null) ? r.estilos[label] : '-';
               base.push(val === null || val === undefined || val === '' ? '-' : val);
             });
-          } else {
-            base.push(r.comunicacion ?? '-');
-            base.push(r.respeto ?? '-');
-            base.push(r.desarrollo ?? '-');
-            base.push(r.adaptabilidad ?? '-');
-            base.push(r.motivacion ?? '-');
           }
           base.push(r.promedio ?? '-');
-          const row = worksheet.addRow(base);
+          const row = estilosSheet.addRow(base);
           row.eachCell((cell) => {
             if (cell.value === null || cell.value === undefined || (typeof cell.value === 'string' && String(cell.value).trim() === '')) cell.value = '-';
             cell.alignment = { horizontal: 'center', vertical: 'middle' };
@@ -461,9 +483,6 @@ React.useEffect(() => {
                 <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                   <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ background: row.evaluadores <= 2 ? '#fee2e2' : '#eef2ff', color: row.evaluadores <= 2 ? '#dc2626' : '#0b5394', padding: '6px 8px', borderRadius: 8 }}>{row.evaluadores}</span>
-                    <button title="Descargar PDF" style={{ padding: '6px 8px', fontSize: 12, borderRadius: 6, border: '1px solid rgba(15,23,42,0.06)', background: '#fff', cursor: 'default' }}>
-                      <img src="/images/descargar.png" alt="PDF" style={{ width: 14, height: 14, display: 'inline-block', verticalAlign: 'middle', marginRight: 6 }} />PDF
-                    </button>
                   </div>
                 </td>
                 <td style={{ padding: '10px 12px', textAlign: 'center' }}><span style={{ display: 'inline-block', minWidth: 48, padding: '6px 8px', borderRadius: 8, background: typeof row.comunicacion === 'number' ? getAvgColor(row.comunicacion) : 'transparent' }}>{row.comunicacion}</span></td>
@@ -509,9 +528,6 @@ React.useEffect(() => {
                 <td style={styles.td}>
                   <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ ...styles.badge, background: row.evaluadores <= 2 ? '#fee2e2' : '#eef2ff', color: row.evaluadores <= 2 ? '#dc2626' : '#0b5394' }}>{row.evaluadores}</span>
-                    <button title="Descargar PDF" style={{ padding: '6px 8px', fontSize: 12, borderRadius: 6, border: '1px solid rgba(15,23,42,0.06)', background: '#fff', cursor: 'default' }}>
-                      <img src="/images/descargar.png" alt="PDF" style={{ width: 14, height: 14, display: 'inline-block', verticalAlign: 'middle', marginRight: 6 }} />PDF
-                    </button>
                   </div>
                 </td>
                 {estilosCols && estilosCols.length ? (
