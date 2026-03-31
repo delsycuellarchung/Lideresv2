@@ -33,43 +33,60 @@ export async function exportToExcel(
   competencias: string[]
 ) {
   const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet('Resultados');
-  const headers = ['CÓDIGO', 'EVALUADO', 'EVALUADOR', 'FECHA'];
-  // Competencia columns: if provided use campe names, else fallback to defaults
-  const competenciaCols = (Array.isArray(competencias) && competencias.length) ? competencias : ['Comunicación', 'Respeto', 'Desarrollo', 'Adaptabilidad', 'Motivación'];
-  headers.push(...competenciaCols.map(c => String(c).toUpperCase()));
-  // Estilos columns
-  const estiloCols = estilos.map(e => String(e.pregunta || '').toUpperCase());
-  headers.push(...estiloCols);
-  // instrucciones kept for backward-compat but appended after estilos
-  headers.push(...instrucciones.map(i => String(i).toUpperCase().substring(0, 15)));
-  headers.push('PROMEDIO');
 
-  worksheet.columns = [
+  // create two worksheets for Competencias and Estilos
+  const sheetComp = workbook.addWorksheet('Competencias');
+  const sheetEst = workbook.addWorksheet('Estilos');
+
+  // Competencia and estilo labels
+  const competenciaCols = (Array.isArray(competencias) && competencias.length) ? competencias : ['Comunicación', 'Respeto', 'Desarrollo', 'Adaptabilidad', 'Motivación'];
+  const estiloCols = estilos.map(e => String(e.pregunta || '').toUpperCase());
+
+  // split afirmaciones by category
+  const compAfirmaciones = (Array.isArray(afirmaciones) ? afirmaciones : []).filter(a => String(a?.categoria || '').toLowerCase() === 'competencia');
+  const estAfirmaciones = (Array.isArray(afirmaciones) ? afirmaciones : []).filter(a => String(a?.categoria || '').toLowerCase() === 'estilo');
+
+  // build columns for competencias sheet
+  sheetComp.columns = [
     { header: 'CÓDIGO', key: 'codigo', width: 12 },
     { header: 'EVALUADO', key: 'evaluado', width: 30 },
     { header: 'EVALUADOR', key: 'evaluador', width: 28 },
     { header: 'FECHA', key: 'fecha', width: 18 },
     ...competenciaCols.map(c => ({ header: String(c).toUpperCase(), key: `comp_${String(c)}`, width: 14 })),
-    ...estiloCols.map(c => ({ header: c, key: `est_${c}`, width: 14 })),
+    ...compAfirmaciones.map(a => ({ header: `${String(a.codigo || '')} - ${String(a.pregunta || '')}`.toUpperCase().substring(0, 40), key: `aff_${String(a.codigo)}`, width: 40 })),
     ...instrucciones.map(i => ({ header: String(i).toUpperCase().substring(0, 15), key: `ins_${String(i)}`, width: 11 })),
     { header: 'PROMEDIO', key: 'promedio', width: 12 }
   ];
 
-  const headerRow = worksheet.getRow(1);
-  headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
-  headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F46E5' } };
-  headerRow.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-  headerRow.height = 30;
+  // build columns for estilos sheet
+  sheetEst.columns = [
+    { header: 'CÓDIGO', key: 'codigo', width: 12 },
+    { header: 'EVALUADO', key: 'evaluado', width: 30 },
+    { header: 'EVALUADOR', key: 'evaluador', width: 28 },
+    { header: 'FECHA', key: 'fecha', width: 18 },
+    ...estiloCols.map(c => ({ header: c, key: `est_${c}`, width: 14 })),
+    ...estAfirmaciones.map(a => ({ header: `${String(a.codigo || '')} - ${String(a.pregunta || '')}`.toUpperCase().substring(0, 40), key: `aff_${String(a.codigo)}`, width: 40 })),
+    ...instrucciones.map(i => ({ header: String(i).toUpperCase().substring(0, 15), key: `ins_${String(i)}`, width: 11 })),
+    { header: 'PROMEDIO', key: 'promedio', width: 12 }
+  ];
 
-  headerRow.eachCell(cell => {
-    cell.border = {
-      top: { style: 'thin', color: { argb: 'FF000000' } },
-      left: { style: 'thin', color: { argb: 'FF000000' } },
-      bottom: { style: 'thin', color: { argb: 'FF000000' } },
-      right: { style: 'thin', color: { argb: 'FF000000' } },
-    };
-  });
+  const styleHeader = (headerRow: any) => {
+    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F46E5' } };
+    headerRow.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    headerRow.height = 30;
+    headerRow.eachCell((cell: any) => {
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FF000000' } },
+        left: { style: 'thin', color: { argb: 'FF000000' } },
+        bottom: { style: 'thin', color: { argb: 'FF000000' } },
+        right: { style: 'thin', color: { argb: 'FF000000' } },
+      };
+    });
+  };
+
+  styleHeader(sheetComp.getRow(1));
+  styleHeader(sheetEst.getRow(1));
 
   let rowNumber = 2;
 
@@ -131,22 +148,36 @@ export async function exportToExcel(
     if (r.evaluatorName) byEvaluado[code].evaluadoresSet.add(String(r.evaluatorName).trim());
     byEvaluado[code].entries.push(r);
   });
-
+  // populate both sheets with aggregated rows
   Object.values(byEvaluado).forEach((item: any) => {
     const evaluadores = item.evaluadoresSet ? item.evaluadoresSet.size : 0;
     // Only export evaluateds with more than 3 evaluators
     if (!(evaluadores > 3)) return;
 
-    const row = worksheet.getRow(rowNumber);
-    row.getCell(1).value = item.codigo || '-';
-    row.getCell(2).value = item.nombre || '-';
-    row.getCell(3).value = Array.from(item.evaluadoresSet || []).join(', ') || '-';
-    row.getCell(4).value = item.entries && item.entries.length ? (item.entries[0].createdAt ? new Date(item.entries[0].createdAt).toLocaleDateString() : '-') : '-';
+    const fechaVal = item.entries && item.entries.length ? (item.entries[0].createdAt ? new Date(item.entries[0].createdAt).toLocaleDateString() : '-') : '-';
 
-    const baseIndex = 5;
-    // competencias averages across entries
-    compKeys.forEach((ck, i) => {
-      const codes = codesByGroup[ck] || [];
+    // --- Competencias sheet row ---
+    const compRowValues: any[] = [];
+    compRowValues.push(item.codigo || '-');
+    compRowValues.push(item.nombre || '-');
+    compRowValues.push(Array.from(item.evaluadoresSet || []).join(', ') || '-');
+    compRowValues.push(fechaVal);
+
+    // competencia averages
+    const compKeys = competenciaCols.map(c => String(c).toLowerCase());
+    compKeys.forEach((ck: string) => {
+      const codes = ((): string[] => {
+        try {
+          const arr: string[] = [];
+          (Array.isArray(afirmaciones) ? afirmaciones : []).forEach((a: any) => {
+            const categoria = String(a.categoria || '').toLowerCase();
+            if (categoria !== 'competencia') return;
+            const tipo = String(a.tipo || '').toLowerCase();
+            if (tipo && (tipo === ck || tipo.includes(ck) || ck.includes(tipo))) arr.push(String(a.codigo));
+          });
+          return arr;
+        } catch (e) { return []; }
+      })();
       const vals: number[] = [];
       item.entries.forEach((e: any) => {
         codes.forEach((c: string) => {
@@ -155,12 +186,73 @@ export async function exportToExcel(
           if (typeof num === 'number' && !isNaN(num)) vals.push(num);
         });
       });
-      const avg = vals.length ? +(vals.reduce((s, v) => s + v, 0) / vals.length).toFixed(2) : null;
-      row.getCell(baseIndex + i).value = avg !== null ? avg : '-';
+      const avg = vals.length ? +(vals.reduce((s, v) => s + v, 0) / vals.length).toFixed(2) : '-';
+      compRowValues.push(avg);
     });
 
-    // estilos averages across entries
-    estiloCols.forEach((label, ei) => {
+    // individual competencia afirmaciones
+    compAfirmaciones.forEach((a: any) => {
+      const code = String(a.codigo || '');
+      const vals: number[] = [];
+      item.entries.forEach((e: any) => {
+        const raw = e.responses?.[code];
+        const num = mapLabelToNumeric(String(raw || ''));
+        if (typeof num === 'number' && !isNaN(num)) vals.push(num);
+      });
+      const avg = vals.length ? +(vals.reduce((s, v) => s + v, 0) / vals.length).toFixed(2) : '-';
+      compRowValues.push(avg);
+    });
+
+    // instrucciones
+    instrucciones.forEach((ins: any) => {
+      const vals: number[] = [];
+      item.entries.forEach((e: any) => {
+        Object.keys(e.responses || {}).forEach(k => {
+          if (String(e.responses[k]) === String(ins)) {
+            const num = mapLabelToNumeric(String(e.responses[k] || ''));
+            if (typeof num === 'number' && !isNaN(num)) vals.push(num);
+          }
+        });
+      });
+      const avg = vals.length ? +(vals.reduce((s, v) => s + v, 0) / vals.length).toFixed(2) : '-';
+      compRowValues.push(avg);
+    });
+
+    // overall promedio
+    const allNums: number[] = [];
+    item.entries.forEach((e: any) => {
+      Object.keys(e.responses || {}).forEach(k => {
+        const num = mapLabelToNumeric(String(e.responses[k] || ''));
+        if (typeof num === 'number' && !isNaN(num)) allNums.push(num);
+      });
+    });
+    const overall = allNums.length ? +(allNums.reduce((s, v) => s + v, 0) / allNums.length).toFixed(2) : '-';
+    compRowValues.push(overall);
+
+    const compRow = sheetComp.addRow(compRowValues);
+    compRow.eachCell((cell: any, colNumber: number) => {
+      cell.font = { size: 10, color: { argb: 'FF0F172A' } };
+      cell.alignment = { horizontal: colNumber >= 5 ? 'center' : 'left', vertical: 'middle' };
+      if (!cell.border) {
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+          left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+          bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+          right: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+        };
+      }
+    });
+    compRow.height = 18;
+
+    // --- Estilos sheet row ---
+    const estRowValues: any[] = [];
+    estRowValues.push(item.codigo || '-');
+    estRowValues.push(item.nombre || '-');
+    estRowValues.push(Array.from(item.evaluadoresSet || []).join(', ') || '-');
+    estRowValues.push(fechaVal);
+
+    // estilos averages (per estiloCols)
+    estiloCols.forEach((label: string) => {
       const codesForEst: string[] = [];
       (Array.isArray(afirmaciones) ? afirmaciones : []).forEach(a => {
         try {
@@ -181,12 +273,25 @@ export async function exportToExcel(
           if (typeof num === 'number' && !isNaN(num)) vals.push(num);
         });
       });
-      const avg = vals.length ? +(vals.reduce((s, v) => s + v, 0) / vals.length).toFixed(2) : null;
-      row.getCell(baseIndex + compKeys.length + ei).value = avg !== null ? avg : '-';
+      const avg = vals.length ? +(vals.reduce((s, v) => s + v, 0) / vals.length).toFixed(2) : '-';
+      estRowValues.push(avg);
     });
 
-    // instrucciones averages across entries
-    instrucciones.forEach((ins, insIdx) => {
+    // individual estilo afirmaciones
+    estAfirmaciones.forEach((a: any) => {
+      const code = String(a.codigo || '');
+      const vals: number[] = [];
+      item.entries.forEach((e: any) => {
+        const raw = e.responses?.[code];
+        const num = mapLabelToNumeric(String(raw || ''));
+        if (typeof num === 'number' && !isNaN(num)) vals.push(num);
+      });
+      const avg = vals.length ? +(vals.reduce((s, v) => s + v, 0) / vals.length).toFixed(2) : '-';
+      estRowValues.push(avg);
+    });
+
+    // instrucciones
+    instrucciones.forEach((ins: any) => {
       const vals: number[] = [];
       item.entries.forEach((e: any) => {
         Object.keys(e.responses || {}).forEach(k => {
@@ -196,26 +301,16 @@ export async function exportToExcel(
           }
         });
       });
-      const colIdx = baseIndex + compKeys.length + estiloCols.length + insIdx;
-      const avg = vals.length ? +(vals.reduce((s, v) => s + v, 0) / vals.length).toFixed(2) : null;
-      row.getCell(colIdx).value = avg !== null ? avg : '-';
+      const avg = vals.length ? +(vals.reduce((s, v) => s + v, 0) / vals.length).toFixed(2) : '-';
+      estRowValues.push(avg);
     });
 
-    // overall promedio across all numeric answers for this evaluated
-    const allNums: number[] = [];
-    item.entries.forEach((e: any) => {
-      Object.keys(e.responses || {}).forEach(k => {
-        const num = mapLabelToNumeric(String(e.responses[k] || ''));
-        if (typeof num === 'number' && !isNaN(num)) allNums.push(num);
-      });
-    });
-    const promedioCol = baseIndex + compKeys.length + estiloCols.length + instrucciones.length;
-    const overall = allNums.length ? +(allNums.reduce((s, v) => s + v, 0) / allNums.length).toFixed(2) : null;
-    row.getCell(promedioCol).value = overall !== null ? overall : '-';
+    estRowValues.push(overall);
 
-    row.eachCell((cell, colNumber) => {
+    const estRow = sheetEst.addRow(estRowValues);
+    estRow.eachCell((cell: any, colNumber: number) => {
       cell.font = { size: 10, color: { argb: 'FF0F172A' } };
-      cell.alignment = { horizontal: colNumber >= baseIndex ? 'center' : 'left', vertical: 'middle' };
+      cell.alignment = { horizontal: colNumber >= 5 ? 'center' : 'left', vertical: 'middle' };
       if (!cell.border) {
         cell.border = {
           top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
@@ -225,12 +320,13 @@ export async function exportToExcel(
         };
       }
     });
+    estRow.height = 18;
 
-    row.height = 18;
     rowNumber++;
   });
 
-  worksheet.views = [{ state: 'frozen', ySplit: 1 }];
+  sheetComp.views = [{ state: 'frozen', ySplit: 1 }];
+  sheetEst.views = [{ state: 'frozen', ySplit: 1 }];
 
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });

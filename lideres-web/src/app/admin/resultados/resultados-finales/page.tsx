@@ -11,6 +11,170 @@ export default function ResultadosFinalesPage() {
     const str = String(s);
     return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
   };
+  const handleExportPDF = async () => {
+    if (typeof window === 'undefined') return;
+    try {
+      const html2canvas = (await import('html2canvas')).default;
+      const { PDFDocument } = await import('pdf-lib');
+
+      // Build a clean printable DOM so tables render consistently (no buttons/images)
+      const PDF_PT_TO_PX = 96 / 72; // 1pt = 1.3333px at 96dpi
+      const pdfPageWidth = 595.28; // A4 pt
+      const pdfPageHeight = 841.89; // A4 pt
+      const sideMarginPt = 20; // points
+      const captureWidthPx = Math.floor((pdfPageWidth - sideMarginPt * 2) * PDF_PT_TO_PX);
+
+      const createTable = (headers: string[], rows: any[][]) => {
+        const tbl = document.createElement('table');
+        tbl.style.width = '100%';
+        tbl.style.borderCollapse = 'collapse';
+        tbl.style.marginBottom = '18px';
+        const thead = document.createElement('thead');
+        const trh = document.createElement('tr');
+        headers.forEach(h => {
+          const th = document.createElement('th');
+          th.textContent = h;
+          th.style.padding = '6px 8px';
+          th.style.border = '1px solid #e6e6e6';
+          th.style.background = '#f3f4f6';
+          th.style.fontSize = '11px';
+          th.style.textAlign = 'center';
+          trh.appendChild(th);
+        });
+        thead.appendChild(trh);
+        tbl.appendChild(thead);
+        const tbody = document.createElement('tbody');
+        rows.forEach(r => {
+          const tr = document.createElement('tr');
+          r.forEach((c: any) => {
+            const td = document.createElement('td');
+            td.textContent = c == null ? '-' : String(c);
+            td.style.padding = '6px 8px';
+            td.style.border = '1px solid #f0f0f0';
+            td.style.fontSize = '11px';
+            td.style.textAlign = 'center';
+            tr.appendChild(td);
+          });
+          tbody.appendChild(tr);
+        });
+        tbl.appendChild(tbody);
+        return tbl;
+      };
+
+      // Build competencias data
+      const competenciaCols = ['Comunicación y dirección', 'Respeto y confianza', 'Desarrollo de equipo y empowerment', 'Adaptabilidad y resiliencia', 'Motivación e influencia'];
+      const compHeaders = ['Cod', 'Evaluado', 'Fecha', 'Número de evaluadores', ...competenciaCols, 'Promedio'];
+      const compRows: any[][] = [];
+      (datos || []).forEach((r: any) => {
+        try {
+          const evaluadores = Number(r.evaluadores) || 0;
+          if (!(evaluadores > 3)) return;
+          compRows.push([
+            r.codigo || '-',
+            r.nombre || '-',
+            r.fecha || '-',
+            evaluadores || '-',
+            r.comunicacion ?? '-',
+            r.respeto ?? '-',
+            r.desarrollo ?? '-',
+            r.adaptabilidad ?? '-',
+            r.motivacion ?? '-',
+            r.promedio ?? '-'
+          ]);
+        } catch (e) {}
+      });
+      const compTable = createTable(compHeaders, compRows);
+
+      // Build estilos data
+      const estHeaders = ['Cod', 'Evaluado', 'Fecha', 'Número de evaluadores', ...(estilosCols && estilosCols.length ? estilosCols.map(s => String(s)) : []), 'Promedio'];
+      const estRows: any[][] = [];
+      (datos || []).forEach((r: any) => {
+        try {
+          const evaluadores = Number(r.evaluadores) || 0;
+          if (!(evaluadores > 3)) return;
+          const row: any[] = [r.codigo || '-', r.nombre || '-', r.fecha || '-', evaluadores || '-'];
+          (estilosCols || []).forEach((label: string) => {
+            const val = r.estilos && (r.estilos[label] != null) ? r.estilos[label] : '-';
+            row.push(val === null || val === undefined || val === '' ? '-' : val);
+          });
+          row.push(r.promedio ?? '-');
+          estRows.push(row);
+        } catch (e) {}
+      });
+      const estTable = createTable(estHeaders, estRows);
+
+      // Capture each table separately and add one landscape PDF page per table
+      const pdfDoc = await PDFDocument.create();
+      const pdfLandscapeWidth = 841.89; // A4 landscape pt
+      const pdfLandscapeHeight = 595.28; // A4 landscape pt
+      const sideMarginPtLocal = 20;
+      const captureWidthPxLocal = Math.floor((pdfLandscapeWidth - sideMarginPtLocal * 2) * (96 / 72));
+
+      const captureAndAddPage = async (titleText: string, tableEl: HTMLTableElement) => {
+        const containerEl = document.createElement('div');
+        containerEl.style.boxSizing = 'border-box';
+        containerEl.style.width = `${captureWidthPxLocal}px`;
+        containerEl.style.padding = '12px';
+        containerEl.style.background = '#ffffff';
+        containerEl.style.color = '#0f172a';
+
+        const title = document.createElement('h1');
+        title.textContent = titleText;
+        title.style.fontSize = '16px';
+        title.style.margin = '0 0 6px 0';
+        containerEl.appendChild(title);
+
+        const dateEl2 = document.createElement('div');
+        dateEl2.textContent = `Fecha: ${new Date().toLocaleDateString()}`;
+        dateEl2.style.fontSize = '12px';
+        dateEl2.style.marginBottom = '8px';
+        containerEl.appendChild(dateEl2);
+
+        // clone table to avoid moving original
+        const tableClone = tableEl.cloneNode(true) as HTMLTableElement;
+        tableClone.style.width = '100%';
+        containerEl.appendChild(tableClone);
+
+        containerEl.style.position = 'fixed';
+        containerEl.style.left = '0';
+        containerEl.style.top = '-99999px';
+        document.body.appendChild(containerEl);
+
+        const canvasEl = await html2canvas(containerEl as HTMLElement, { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#ffffff' });
+        document.body.removeChild(containerEl);
+
+        const sliceDataUrl = canvasEl.toDataURL('image/png');
+        const pngImage = await pdfDoc.embedPng(sliceDataUrl);
+        const pngDims = pngImage.scale(pdfLandscapeWidth / pngImage.width);
+
+        const page = pdfDoc.addPage([pdfLandscapeWidth, pdfLandscapeHeight]);
+        page.drawImage(pngImage, {
+          x: 0,
+          y: pdfLandscapeHeight - pngDims.height,
+          width: pngDims.width,
+          height: pngDims.height,
+        });
+      };
+
+      await captureAndAddPage('Resultados - Competencias', compTable as HTMLTableElement);
+      await captureAndAddPage('Resultados - Estilos', estTable as HTMLTableElement);
+
+      const pdfBytes = await pdfDoc.save();
+      const blob = new Blob([pdfBytes as any], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Resultados-Finales-${new Date().toISOString().split('T')[0]}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('Error exporting PDF (image slice)', e);
+      alert('Error al generar el PDF. Revisa la consola.');
+    }
+  };
+  
 
 React.useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -445,12 +609,12 @@ React.useEffect(() => {
     avgBadge: (value: any) => ({ display: 'inline-block', minWidth: 48, padding: '6px 8px', borderRadius: 8, background: typeof value === 'number' ? getAvgColor(value) : 'transparent' } as React.CSSProperties)
   };
   return (
-    <section style={{ padding: '6px 24px 20px 24px' }}>
+    <section id="resultados-print-area" style={{ padding: '6px 24px 20px 24px' }}>
       <h1 style={{ margin: '0 0 0 12px', fontSize: 32, fontWeight: 800, transform: 'translateY(-70px)' }}>RESULTADOS FINALES</h1>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 8 }}>
         <div style={{ flex: 1 }} />
         <div style={{ display: 'flex', gap: 8 }}>
-          <button title="Descargar PDF" className="btn-press icon-btn" style={{ padding: '8px 12px', fontSize: 14 }}>
+          <button title="Descargar PDF" className="btn-press icon-btn" onClick={handleExportPDF} style={{ padding: '8px 12px', fontSize: 14 }}>
             <img src="/images/descargar.png" alt="PDF" style={{ width: 18, height: 18, marginRight: 8 }} />PDF
           </button>
           <button className="btn-press icon-btn" onClick={handleExport} style={{ padding: '8px 12px', fontSize: 14 }}>

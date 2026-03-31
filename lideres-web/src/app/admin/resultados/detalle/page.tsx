@@ -389,6 +389,10 @@ setAllResponses(normalized);
           <div style={{ display: 'flex', flexDirection: 'row', gap: 12, alignItems: 'center' }}>
             <label style={{ fontSize: 13, fontWeight: 700, color: '#374151', marginRight: 8 }}>Evaluadores</label>
             <input disabled value={(selectedData?.evaluadores ?? 0).toString()} placeholder="# Evaluadores" style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid rgba(15,23,42,0.08)', width: 120, textAlign: 'center', background: '#cbd5e1', color: '#0f172a' }} />
+          
+            <button title="Exportar Excel" className="btn-press icon-btn" style={{ padding: '8px 12px', fontSize: 14 }}>
+              <img src="/images/descargar.png" alt="Excel" style={{ width: 18, height: 18, marginRight: 8 }} />Excel
+            </button>
           </div>
         </div>
       </div>
