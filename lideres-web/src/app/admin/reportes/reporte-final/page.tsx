@@ -9,12 +9,42 @@ export default function ReporteFinalPage() {
   const [afCompetencias, setAfCompetencias] = React.useState<Array<any>>([]);
   const [afEstilos, setAfEstilos] = React.useState<Array<any>>([]);
   const [loading, setLoading] = React.useState(false);
+  const reportRef = React.useRef<HTMLElement | null>(null);
+
+  const handleDownloadPdf = async () => {
+    if (!reportRef.current) return;
+    try {
+      const html2canvasMod = await import('html2canvas').catch(() => null);
+      if (!html2canvasMod) { alert('Instala html2canvas (npm install html2canvas) para descargar PDF.'); return; }
+      const html2canvas = html2canvasMod.default || html2canvasMod;
+      const canvas = await html2canvas(reportRef.current as HTMLElement, { scale: 2 });
+      const imgData = canvas.toDataURL('image/png');
+      const jspdfMod: any = await import('jspdf').catch(() => null);
+      if (!jspdfMod) { alert('Instala jspdf (npm install jspdf) para descargar PDF.'); return; }
+      const jsPDFClass: any = jspdfMod.jsPDF || jspdfMod.default || jspdfMod;
+      const pdf = new jsPDFClass('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      const timestamp = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+      const fn = `reporte-final-${codigo || 'sin-codigo'}-${timestamp}.pdf`;
+      pdf.save(fn);
+    } catch (e) {
+      console.error('Error generando PDF', e);
+      alert('Error al generar PDF. Revisa la consola.');
+    }
+  };
 
   return (
-    <section style={{ padding: 28, marginTop: 48 }}>
-      <h2 style={{ margin: '-125px 0 16px 0', fontSize: 33, fontWeight: 800 }}>REPORTE FINAL</h2>
+    <section ref={reportRef} style={{ padding: 28, marginTop: 48 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <h2 style={{ margin: '-220px 0 16px 0', fontSize: 33, fontWeight: 800 }}>REPORTE FINAL</h2>
+        <div>
+          <button onClick={handleDownloadPdf} aria-label="descargar-pdf" style={{ padding: '8px 12px', borderRadius: 8, background: '#4F46E5', color: '#fff', border: 'none', cursor: 'pointer' }}>Descargar PDF</button>
+        </div>
+      </div>
 
-      <div style={{ marginTop: 8, marginLeft: 12 }}>
+      <div style={{ marginTop: -60, marginLeft: 12 }}>
         <label style={{ display: 'block', fontWeight: 700, marginBottom: 12 }}>Buscar por código del evaluado</label>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <input
@@ -46,13 +76,10 @@ export default function ReporteFinalPage() {
                 if (typeof v === 'number') return isNaN(v) ? null : v;
                 const s = String(v).trim();
                 if (!s) return null;
-                // try numeric first
                 const n = Number(s);
                 if (!isNaN(n)) return n;
-                // delegate to shared mapper which knows project-specific labels
                 const mapped = mapLabelToNumeric(s);
                 if (mapped !== null) return mapped;
-                // fallback: extract first digit
                 const m = s.match(/\d+(?:\.\d+)?/);
                 return m ? Number(m[0]) : null;
               };
@@ -62,15 +89,12 @@ export default function ReporteFinalPage() {
                 entries.forEach((r: any) => {
                   let raw = r.responses?.[code];
                   if (raw === undefined || raw === null) {
-                    // attempt fallback comp-<index>
                     const globalIdx = afirmaciones.findIndex((af: any) => String(af.codigo) === String(code));
                     if (globalIdx >= 0 && (r.responses?.[`comp-${globalIdx}`] !== undefined)) raw = r.responses?.[`comp-${globalIdx}`];
-                    // as extra fallback, try to find any key that contains the code string
                     if ((raw === undefined || raw === null) && r.responses) {
                       const keys = Object.keys(r.responses || {});
                       for (let k of keys) {
                         if (!k) continue;
-                        // match exact, endsWith or contains
                         if (k === code || k.endsWith(String(code)) || k.includes(String(code))) {
                           raw = r.responses[k];
                           break;
@@ -82,7 +106,7 @@ export default function ReporteFinalPage() {
                   if (typeof num === 'number' && !isNaN(num)) vals.push(num);
                 });
                 if (!vals.length) return null;
-                const avg = vals.reduce((s, v) => s + v, 0) / vals.length;
+                const avg = vals.reduce((acc: number, v: number) => acc + v, 0) / vals.length;
                 return Number(avg.toFixed(2));
               };
 
@@ -104,7 +128,9 @@ export default function ReporteFinalPage() {
                 const name = first.evaluado_nombre || first.evaluadoNombre || first.evaluadoNombreCompleto || '';
                 setNombre(name || '');
                 // compute unique evaluadores
-                const evalSet = new Set(entries.map((e:any) => String(e.evaluator_name || e.evaluatorName || e.evaluador || '').trim()).filter(s => !!s));
+                const evalNames: string[] = entries.map((e: any) => String(e.evaluator_name || e.evaluatorName || e.evaluador || '').trim());
+                const filtered = evalNames.filter((n) => !!n);
+                const evalSet = new Set(filtered);
                 setEvaluadores(evalSet.size || 0);
               }
               // debug: print counts
