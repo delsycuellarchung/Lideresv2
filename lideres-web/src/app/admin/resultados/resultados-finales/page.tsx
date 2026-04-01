@@ -21,7 +21,7 @@ export default function ResultadosFinalesPage() {
       const PDF_PT_TO_PX = 96 / 72; // 1pt = 1.3333px at 96dpi
       const pdfPageWidth = 595.28; // A4 pt
       const pdfPageHeight = 841.89; // A4 pt
-      const sideMarginPt = 20; // points
+      const sideMarginPt = 56.7; // 2 cm margin in points (~56.7pt)
       const captureWidthPx = Math.floor((pdfPageWidth - sideMarginPt * 2) * PDF_PT_TO_PX);
 
       const createTable = (headers: string[], rows: any[][]) => {
@@ -103,11 +103,34 @@ export default function ResultadosFinalesPage() {
       });
       const estTable = createTable(estHeaders, estRows);
 
+      // Make the "Evaluado" column left-aligned and allow wrapping so full names show
+      try {
+        const ths = Array.from(estTable.querySelectorAll('th'));
+        if (ths[1]) {
+          ths[1].style.textAlign = 'left';
+          ths[1].style.width = '220px';
+          ths[1].style.whiteSpace = 'normal';
+          ths[1].style.wordBreak = 'break-word';
+        }
+        const rows = Array.from(estTable.querySelectorAll('tbody tr')) as HTMLTableRowElement[];
+        rows.forEach(r => {
+          const cells = Array.from(r.children) as HTMLElement[];
+          if (cells[1]) {
+            cells[1].style.textAlign = 'left';
+            cells[1].style.whiteSpace = 'normal';
+            cells[1].style.wordBreak = 'break-word';
+            cells[1].style.maxWidth = '220px';
+          }
+        });
+      } catch (e) {
+        // ignore DOM tweak errors
+      }
+
       // Capture each table separately and add one landscape PDF page per table
       const pdfDoc = await PDFDocument.create();
       const pdfLandscapeWidth = 841.89; // A4 landscape pt
       const pdfLandscapeHeight = 595.28; // A4 landscape pt
-      const sideMarginPtLocal = 20;
+      const sideMarginPtLocal = 56.7; // 2 cm margin in points
       const captureWidthPxLocal = Math.floor((pdfLandscapeWidth - sideMarginPtLocal * 2) * (96 / 72));
 
       const captureAndAddPage = async (titleText: string, tableEl: HTMLTableElement) => {
@@ -145,12 +168,16 @@ export default function ResultadosFinalesPage() {
 
         const sliceDataUrl = canvasEl.toDataURL('image/png');
         const pngImage = await pdfDoc.embedPng(sliceDataUrl);
-        const pngDims = pngImage.scale(pdfLandscapeWidth / pngImage.width);
+        // scale image to fit within landscape width minus side margins
+        const targetWidthPt = pdfLandscapeWidth - sideMarginPtLocal * 2;
+        const scale = targetWidthPt / pngImage.width;
+        const pngDims = pngImage.scale(scale);
 
         const page = pdfDoc.addPage([pdfLandscapeWidth, pdfLandscapeHeight]);
+        // draw image offset by left/top margins
         page.drawImage(pngImage, {
-          x: 0,
-          y: pdfLandscapeHeight - pngDims.height,
+          x: sideMarginPtLocal,
+          y: pdfLandscapeHeight - sideMarginPtLocal - pngDims.height,
           width: pngDims.width,
           height: pngDims.height,
         });
