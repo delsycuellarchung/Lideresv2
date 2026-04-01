@@ -103,55 +103,59 @@ export default function ResultadosFinalesPage() {
       });
       // Build estilos table and improve layout for printing: fixed layout + explicit column widths
       const estTable = createTable(estHeaders, estRows);
+      // Ensure 'Evaluado' column in competencias is left-aligned (not centered)
       try {
-        estTable.style.tableLayout = 'fixed';
-        // Build colgroup with sensible widths: Cod small, Evaluado wide, Fecha small, #Evaluadores small,
-        // then one small column per estilo, finally Promedio small.
-        const colgroup = document.createElement('colgroup');
-        const cols: string[] = [];
-        cols.push('60px'); // Cod
-        cols.push('200px'); // Evaluado (wide to show full names)
-        cols.push('80px'); // Fecha
-        cols.push('70px'); // Número de evaluadores
-        // estilosCols may vary; allocate narrower width per estilo column so all fit
-        const estiloColPx = '48px';
-        (estilosCols || []).forEach(() => cols.push(estiloColPx));
-        cols.push('50px'); // Promedio
-        cols.forEach(w => {
-          const c = document.createElement('col');
-          c.style.width = w;
-          colgroup.appendChild(c);
-        });
-        // insert colgroup before thead
-        if (estTable.firstChild) estTable.insertBefore(colgroup, estTable.firstChild);
-
-        // Adjust header and cells: left-align Evaluado column and allow wrapping
-        const ths = Array.from(estTable.querySelectorAll('th')) as HTMLElement[];
-        if (ths[1]) {
-          ths[1].style.textAlign = 'left';
-          ths[1].style.whiteSpace = 'normal';
-          ths[1].style.wordBreak = 'break-word';
-          ths[1].style.padding = '6px 8px';
-        }
-        const rowsDom = Array.from(estTable.querySelectorAll('tbody tr')) as HTMLTableRowElement[];
-        rowsDom.forEach(r => {
+        const thsComp = Array.from(compTable.querySelectorAll('th')) as HTMLElement[];
+        if (thsComp[1]) thsComp[1].style.textAlign = 'left';
+        const compRowsDom = Array.from(compTable.querySelectorAll('tbody tr')) as HTMLTableRowElement[];
+        compRowsDom.forEach(r => {
           const cells = Array.from(r.children) as HTMLElement[];
-          // Evaluado column is index 1
           if (cells[1]) {
             cells[1].style.textAlign = 'left';
             cells[1].style.whiteSpace = 'normal';
             cells[1].style.wordBreak = 'break-word';
-            cells[1].style.maxWidth = '200px';
             cells[1].style.padding = '6px 8px';
           }
-          // Reduce font size slightly for estilo value cells so they fit
-          for (let i = 4; i < cells.length - 1; i++) {
-            try { cells[i].style.fontSize = '10px'; cells[i].style.padding = '5px 6px'; } catch (e) {}
-          }
         });
-      } catch (e) {
-        // ignore DOM tweak errors
-      }
+      } catch (e) { /* ignore */ }
+
+      // Adjust estilos table: smaller header font, tighter padding and explicit col widths
+      try {
+        estTable.style.tableLayout = 'fixed';
+        estTable.style.width = '100%';
+        const colgroup = document.createElement('colgroup');
+        const estiloCount = (estilosCols || []).length;
+        const fixedWidths = [55, 200, 70, 65];
+        const promedioWidth = 60;
+        const fixedTotal = fixedWidths.reduce((a, b) => a + b, 0);
+        const availablePx = Math.floor((841.89 - 20 * 2) * (96 / 72));
+        const remainingForEstilos = availablePx - fixedTotal - promedioWidth;
+        const estiloColWidth = estiloCount > 0 ? Math.max(50, Math.floor(remainingForEstilos / estiloCount)) : 65;
+        const allWidths = [...fixedWidths, ...Array(estiloCount).fill(estiloColWidth), promedioWidth];
+        allWidths.forEach(w => { const c = document.createElement('col'); c.style.width = `${w}px`; colgroup.appendChild(c); });
+        if (estTable.firstChild) estTable.insertBefore(colgroup, estTable.firstChild);
+        const ths = Array.from(estTable.querySelectorAll('th')) as HTMLElement[];
+        ths.forEach((th, i) => {
+          th.style.fontSize = estiloCount > 7 ? '9px' : '10px';
+          th.style.padding = '5px 4px';
+          th.style.whiteSpace = 'normal';
+          th.style.wordBreak = 'break-word';
+          th.style.lineHeight = '1.2';
+          th.style.verticalAlign = 'middle';
+          th.style.textAlign = i === 1 ? 'left' : 'center';
+        });
+        const rowsDom = Array.from(estTable.querySelectorAll('tbody tr')) as HTMLTableRowElement[];
+        rowsDom.forEach(r => {
+          const cells = Array.from(r.children) as HTMLElement[];
+          cells.forEach((cell, i) => {
+            cell.style.fontSize = estiloCount > 7 ? '9px' : '10px';
+            cell.style.padding = '5px 4px';
+            cell.style.verticalAlign = 'middle';
+            if (i === 1) { cell.style.textAlign = 'left'; cell.style.whiteSpace = 'normal'; cell.style.wordBreak = 'break-word'; }
+            else { cell.style.textAlign = 'center'; }
+          });
+        });
+      } catch (e) { console.warn('Error ajustando tabla estilos', e); }
 
       // Capture each table separately and add one landscape PDF page per table
       const pdfDoc = await PDFDocument.create();
@@ -210,8 +214,57 @@ export default function ResultadosFinalesPage() {
         });
       };
 
+      // helper: capture table with a custom side margin (points)
+      const captureAndAddPageWithMargin = async (titleText: string, tableEl: HTMLTableElement, marginPt: number) => {
+        const containerEl = document.createElement('div');
+        containerEl.style.boxSizing = 'border-box';
+        const captureWidthPxCustom = Math.floor((pdfLandscapeWidth - marginPt * 2) * (96 / 72));
+        containerEl.style.width = `${captureWidthPxCustom}px`;
+        containerEl.style.padding = '12px';
+        containerEl.style.background = '#ffffff';
+        containerEl.style.color = '#0f172a';
+
+        const title = document.createElement('h1');
+        title.textContent = titleText;
+        title.style.fontSize = '16px';
+        title.style.margin = '0 0 6px 0';
+        containerEl.appendChild(title);
+
+        const dateEl2 = document.createElement('div');
+        dateEl2.textContent = `Fecha: ${new Date().toLocaleDateString()}`;
+        dateEl2.style.fontSize = '12px';
+        dateEl2.style.marginBottom = '8px';
+        containerEl.appendChild(dateEl2);
+
+        const tableClone = tableEl.cloneNode(true) as HTMLTableElement;
+        tableClone.style.width = '100%';
+        containerEl.appendChild(tableClone);
+
+        containerEl.style.position = 'fixed';
+        containerEl.style.left = '0';
+        containerEl.style.top = '-99999px';
+        document.body.appendChild(containerEl);
+
+        const canvasEl = await html2canvas(containerEl as HTMLElement, { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#ffffff' });
+        document.body.removeChild(containerEl);
+
+        const sliceDataUrl = canvasEl.toDataURL('image/png');
+        const pngImage = await pdfDoc.embedPng(sliceDataUrl);
+        const targetWidthPt = pdfLandscapeWidth - marginPt * 2;
+        const scale = targetWidthPt / pngImage.width;
+        const pngDims = pngImage.scale(scale);
+
+        const page = pdfDoc.addPage([pdfLandscapeWidth, pdfLandscapeHeight]);
+        page.drawImage(pngImage, {
+          x: marginPt,
+          y: pdfLandscapeHeight - marginPt - pngDims.height,
+          width: pngDims.width,
+          height: pngDims.height,
+        });
+      };
+
       await captureAndAddPage('Resultados - Competencias', compTable as HTMLTableElement);
-      await captureAndAddPage('Resultados - Estilos', estTable as HTMLTableElement);
+      await captureAndAddPageWithMargin('Resultados - Estilos', estTable as HTMLTableElement, 20);
 
       const pdfBytes = await pdfDoc.save();
       const blob = new Blob([pdfBytes as any], { type: 'application/pdf' });
