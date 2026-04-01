@@ -463,7 +463,7 @@ export default function ReporteFinalPage() {
                                   <tr key={idx} style={{ background: idx % 2 === 0 ? '#ffffff' : '#f8fafc', borderBottom: '1px solid #eef2f7' }}>
                                     <td style={{ padding: '5px 10px', color: '#1e293b', lineHeight: 1.4, wordWrap: 'break-word', whiteSpace: 'normal' }}>{r.pregunta}</td>
                                     <td style={{ padding: '5px 10px', textAlign: 'center' }}>
-                                      <span style={{ display: 'inline-block', minWidth: 40, padding: '2px 8px', borderRadius: 6, background: bg, color, fontWeight: 700, fontSize: 11 }}>
+                                      <span style={{ display: 'inline-block', minWidth: 40, padding: '2px 8px', borderRadius: 6, background: 'transparent', color: '#1e293b', fontWeight: 700, fontSize: 11 }}>
                                         {val !== null ? Number(val).toFixed(2) : '-'}
                                       </span>
                                     </td>
