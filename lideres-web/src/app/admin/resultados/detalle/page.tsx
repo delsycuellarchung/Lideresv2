@@ -10,6 +10,7 @@ type Afirm = { codigo?: string; pregunta: string; tipo?: string | null; categori
 type RespEntry = { id: string; createdAt: string; responses?: Record<string, string>; token?: string; evaluatorName?: string; evaluadoNombre?: string; evaluadoCodigo?: string };
 
 export default function ResultadosPage() {
+  const reportRef = React.useRef<HTMLElement | null>(null);
   const renderCodigo = (val: any): string => {
     if (val == null) return '';
     if (typeof val === 'string') return val;
@@ -359,6 +360,115 @@ setAllResponses(normalized);
     return vals;
   };
 
+    const handleDownloadPdf = async () => {
+      if (typeof window === 'undefined') return;
+      if (!reportRef.current) {
+        alert('No hay contenido para generar el PDF. Carga primero los resultados.');
+        return;
+      }
+      try {
+        const html2canvasMod = await import('html2canvas').catch(() => null);
+        if (!html2canvasMod) { alert('Instala html2canvas (npm install html2canvas) para descargar PDF.'); return; }
+        const html2canvas = html2canvasMod.default || html2canvasMod;
+        const jspdfMod: any = await import('jspdf').catch(() => null);
+        if (!jspdfMod) { alert('Instala jspdf (npm install jspdf) para descargar PDF.'); return; }
+        const jsPDFClass: any = jspdfMod.jsPDF || jspdfMod.default || jspdfMod;
+        const pdf = new jsPDFClass('p', 'mm', 'a4');
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeightMm = pdf.internal.pageSize.getHeight();
+        const marginMm = 12; // comfortable margin for printing
+        const availableWidthMm = pdfWidth - marginMm * 2;
+
+        // clone DOM so we can adjust layout for printing
+        const clone = reportRef.current.cloneNode(true) as HTMLElement;
+        // remove interactive controls
+        try { clone.querySelectorAll('input, button, select, textarea, datalist').forEach(n => n.remove()); } catch (e) {}
+
+        // replace search area with left-aligned header (LIDER + evaluadores)
+        try {
+          const searchInput = clone.querySelector('input[placeholder="Código..."]') || clone.querySelector('input');
+          if (searchInput) {
+            const outer = (searchInput.closest('div') && searchInput.closest('div')!.parentElement) || searchInput.closest('div');
+            if (outer) {
+              outer.innerHTML = '';
+              const leader = document.createElement('div');
+              leader.textContent = `LIDER: ${selectedName || selectedData?.codigo || selectedCode || '-'}`;
+              leader.style.fontWeight = '800'; leader.style.fontSize = '16px'; leader.style.marginBottom = '6px'; leader.style.textAlign = 'left';
+              const evalDiv = document.createElement('div');
+              evalDiv.textContent = `Número de evaluadores: ${selectedData?.evaluadores ?? 0}`;
+              evalDiv.style.fontWeight = '600'; evalDiv.style.fontSize = '12px'; evalDiv.style.marginBottom = '12px'; evalDiv.style.textAlign = 'left';
+              outer.appendChild(leader); outer.appendChild(evalDiv);
+            }
+          }
+        } catch (e) {}
+
+        clone.style.position = 'fixed'; clone.style.left = '-9999px'; clone.style.top = '0';
+        document.body.appendChild(clone);
+
+        // Prefer explicit page blocks; otherwise find major tables
+        const pages = Array.from(clone.querySelectorAll('[data-pdf-page]')) as HTMLElement[];
+        const tables = pages.length ? [] : Array.from(clone.querySelectorAll('table')) as HTMLTableElement[];
+
+        const renderElementToPdf = async (element: HTMLElement, addNewPage: boolean) => {
+          const canvas = await html2canvas(element as HTMLElement, { scale: 2 });
+          const pxPerMm = canvas.width / pdfWidth;
+          const availableHeightMm = pdfHeightMm - marginMm * 2;
+          const pageHeightPx = Math.floor(pxPerMm * availableHeightMm);
+          let y = 0; let pageIdx = 0;
+          while (y < canvas.height) {
+            const sliceH = Math.min(pageHeightPx, canvas.height - y);
+            const tmp = document.createElement('canvas'); tmp.width = canvas.width; tmp.height = sliceH;
+            const ctx = tmp.getContext('2d'); if (!ctx) break;
+            ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,tmp.width,tmp.height);
+            ctx.drawImage(canvas, 0, y, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+            const imgData = tmp.toDataURL('image/png');
+            const imgH_mm = sliceH / pxPerMm;
+            if (pageIdx > 0 || !addNewPage) pdf.addPage();
+            pdf.addImage(imgData, 'PNG', marginMm, marginMm, availableWidthMm, imgH_mm);
+            y += sliceH; pageIdx += 1;
+          }
+        };
+
+        if (pages.length) {
+          for (let i = 0; i < pages.length; i++) {
+            const sec = pages[i];
+            const wrapper = document.createElement('div');
+            wrapper.style.width = '1200px'; wrapper.style.boxSizing = 'border-box'; wrapper.style.padding = '24px'; wrapper.style.background = '#fff';
+            // left-aligned header
+            const leaderHeader = document.createElement('div'); leaderHeader.textContent = `LIDER: ${selectedName || selectedData?.codigo || selectedCode || '-'}`; leaderHeader.style.fontWeight = '800'; leaderHeader.style.fontSize = '16px'; leaderHeader.style.marginBottom = '6px'; leaderHeader.style.textAlign = 'left'; wrapper.appendChild(leaderHeader);
+            const evalHeader = document.createElement('div'); evalHeader.textContent = `Número de evaluadores: ${selectedData?.evaluadores ?? 0}`; evalHeader.style.fontWeight = '600'; evalHeader.style.fontSize = '12px'; evalHeader.style.marginBottom = '12px'; evalHeader.style.textAlign = 'left'; wrapper.appendChild(evalHeader);
+            const secClone = sec.cloneNode(true) as HTMLElement; secClone.style.width = '100%'; wrapper.appendChild(secClone);
+            wrapper.style.position = 'fixed'; wrapper.style.left = '-9999px'; document.body.appendChild(wrapper);
+            await renderElementToPdf(wrapper, i === 0);
+            try { document.body.removeChild(wrapper); } catch (e) {}
+          }
+        } else if (tables.length) {
+          for (let i = 0; i < tables.length; i++) {
+            const tbl = tables[i];
+            const pageEl = document.createElement('div'); pageEl.style.width = '1200px'; pageEl.style.boxSizing = 'border-box'; pageEl.style.padding = '24px'; pageEl.style.background = '#fff';
+            const leaderHeader = document.createElement('div'); leaderHeader.textContent = `LIDER: ${selectedName || selectedData?.codigo || selectedCode || '-'}`; leaderHeader.style.fontWeight = '800'; leaderHeader.style.fontSize = '16px'; leaderHeader.style.marginBottom = '6px'; leaderHeader.style.textAlign = 'left'; pageEl.appendChild(leaderHeader);
+            const evalHeader = document.createElement('div'); evalHeader.textContent = `Número de evaluadores: ${selectedData?.evaluadores ?? 0}`; evalHeader.style.fontWeight = '600'; evalHeader.style.fontSize = '12px'; evalHeader.style.marginBottom = '12px'; evalHeader.style.textAlign = 'left'; pageEl.appendChild(evalHeader);
+            const tblClone = tbl.cloneNode(true) as HTMLElement; tblClone.style.width = '100%'; tblClone.style.borderCollapse = 'collapse'; pageEl.appendChild(tblClone);
+            pageEl.style.position = 'fixed'; pageEl.style.left = '-9999px'; document.body.appendChild(pageEl);
+            await renderElementToPdf(pageEl, i === 0);
+            try { document.body.removeChild(pageEl); } catch (e) {}
+          }
+        } else {
+          // fallback: capture whole clone with margins
+          await renderElementToPdf(clone as HTMLElement, false);
+        }
+
+        const timestamp = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+        const safeName = String(selectedName || selectedData?.codigo || selectedCode || 'resultados').trim().replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_\-]/g, '');
+        const fn = `resultados_finales-${safeName}-${timestamp}.pdf`;
+        pdf.save(fn);
+        try { document.body.removeChild(clone); } catch (e) {}
+
+      } catch (e) {
+        console.error('Error generando PDF', e); alert('Error generando PDF. Revisa la consola.');
+      }
+    };
+
   return (
     <section style={{ padding: '6px 24px 20px 24px' }}>
       <h1 style={{ margin: '0 0 0 12px', fontSize: 32, fontWeight: 800, transform: 'translateY(-70px)' }}>RESULTADOS</h1>
@@ -421,6 +531,9 @@ setAllResponses(normalized);
               }
             }} style={{ padding: '8px 12px', fontSize: 14 }}>
               <img src="/images/descargar.png" alt="Excel" style={{ width: 18, height: 18, marginRight: 8 }} />Excel
+            </button>
+            <button title="Descargar PDF" className="btn-press icon-btn" onClick={async () => { await handleDownloadPdf(); }} style={{ padding: '8px 12px', fontSize: 14, marginLeft: 8 }}>
+              <img src="/images/pdf-icon.png" alt="PDF" style={{ width: 18, height: 18, marginRight: 8 }} />PDF
             </button>
           </div>
         </div>
