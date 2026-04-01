@@ -360,7 +360,7 @@ export default function ReportesPage() {
               leaderDiv.style.fontWeight = '700';
               leaderDiv.style.margin = '0 auto 6px';
               leaderDiv.style.width = '100%';
-              leaderDiv.style.textAlign = 'center';
+              leaderDiv.style.textAlign = 'left';
               leaderDiv.textContent = 'LIDER: ' + (displayName || '');
 
               const evalCount = sel && typeof sel.evaluadores === 'number' ? sel.evaluadores : 0;
@@ -369,7 +369,7 @@ export default function ReportesPage() {
               evalDiv.style.fontWeight = '600';
               evalDiv.style.margin = '0 auto 8px';
               evalDiv.style.width = '100%';
-              evalDiv.style.textAlign = 'center';
+              evalDiv.style.textAlign = 'left';
               evalDiv.textContent = `Número de evaluadores: ${evalCount}`;
 
               // ensure the outer container centers its children
@@ -445,11 +445,12 @@ export default function ReportesPage() {
       if (sections.length) {
         const evalCountForDisplay = selectedCodigo ? (datos.find(dd => String(dd.codigo) === String(selectedCodigo))?.evaluadores || 0) : 0;
         for (let i = 0; i < sections.length; i++) {
-          // create a wrapper with header and spacing so header is visible and content not at top
           const wrapper = document.createElement('div');
           wrapper.style.width = '1200px'; wrapper.style.boxSizing = 'border-box'; wrapper.style.padding = '18px'; wrapper.style.background = '#fff';
-          const leaderHeader = document.createElement('div'); leaderHeader.textContent = `LIDER: ${displayName}`; leaderHeader.style.fontWeight = '800'; leaderHeader.style.fontSize = '16px'; leaderHeader.style.marginBottom = '6px'; leaderHeader.style.textAlign = 'center'; wrapper.appendChild(leaderHeader);
-          const evalHeader = document.createElement('div'); evalHeader.textContent = `Número de evaluadores: ${evalCountForDisplay}`; evalHeader.style.fontWeight = '700'; evalHeader.style.fontSize = '13px'; evalHeader.style.marginBottom = '12px'; evalHeader.style.textAlign = 'center'; wrapper.appendChild(evalHeader);
+          if (i === 0) {
+            const leaderHeader = document.createElement('div'); leaderHeader.textContent = `LIDER: ${displayName}`; leaderHeader.style.fontWeight = '800'; leaderHeader.style.fontSize = '16px'; leaderHeader.style.marginBottom = '6px'; leaderHeader.style.textAlign = 'left'; wrapper.appendChild(leaderHeader);
+            const evalHeader = document.createElement('div'); evalHeader.textContent = `Número de evaluadores: ${evalCountForDisplay}`; evalHeader.style.fontWeight = '700'; evalHeader.style.fontSize = '13px'; evalHeader.style.marginBottom = '12px'; evalHeader.style.textAlign = 'left'; wrapper.appendChild(evalHeader);
+          }
           const cloneSec = sections[i].cloneNode(true) as HTMLElement; cloneSec.style.width = '100%'; wrapper.appendChild(cloneSec);
           wrapper.style.position = 'fixed'; wrapper.style.left = '-9999px'; document.body.appendChild(wrapper);
           await renderElementPages(wrapper, i === 0);
@@ -655,40 +656,27 @@ const radarOptions = React.useMemo(() => {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 22, alignItems: 'start' }}>
             <div data-pdf-page>
               <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 16, fontSize: 13 }}>
-                  <thead>
-                    <tr style={{ background: '#8B7355' }}>
-                      <td colSpan={2} style={{ padding: '6px 12px', color: '#fff', fontWeight: 700, textAlign: 'center' }}>MAS UTILIZADOS</td>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr style={{ border: '1px solid #d1c9b0' }}>
-                      <td style={{ padding: '6px 12px', fontWeight: 700, background: '#f5f0e8' }}>Competencia</td>
-                      <td style={{ padding: '6px 12px' }}>{masYMenos?.maxComp?.label ?? '-'}</td>
-                    </tr>
-                    <tr style={{ border: '1px solid #d1c9b0' }}>
-                      <td style={{ padding: '6px 12px', fontWeight: 700, background: '#f5f0e8' }}>Estilo</td>
-                      <td style={{ padding: '6px 12px' }}>{masYMenos?.maxEst?.label ? masYMenos.maxEst.label.charAt(0).toUpperCase() + masYMenos.maxEst.label.slice(1).toLowerCase() : '-'}</td>
-                    </tr>
-                  </tbody>
-                  <thead>
-                    <tr style={{ background: '#8B7355' }}>
-                      <td colSpan={2} style={{ padding: '6px 12px', color: '#fff', fontWeight: 700, textAlign: 'center' }}>MENOS UTILIZADOS</td>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr style={{ border: '1px solid #d1c9b0' }}>
-                      <td style={{ padding: '6px 12px', fontWeight: 700, background: '#f5f0e8' }}>Competencia</td>
-                      <td style={{ padding: '6px 12px' }}>{masYMenos?.minComp?.label ?? '-'}</td>
-                    </tr>
-                    <tr style={{ border: '1px solid #d1c9b0' }}>
-                      <td style={{ padding: '6px 12px', fontWeight: 700, background: '#f5f0e8' }}>Estilo</td>
-                      <td style={{ padding: '6px 12px' }}>{masYMenos?.minEst?.label
-  ? masYMenos.minEst.label.charAt(0).toUpperCase() + masYMenos.minEst.label.slice(1).toLowerCase()
-  : '-'}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>Competencias</div>
+                <thead>
+                  <tr style={{ background: '#8B7355' }}>
+                    <td style={{ padding: '6px 12px', color: '#fff', fontWeight: 700, textAlign: 'center' }}>Tipo</td>
+                    <td style={{ padding: '6px 12px', color: '#fff', fontWeight: 700, textAlign: 'center' }}>Más utilizados</td>
+                    <td style={{ padding: '6px 12px', color: '#fff', fontWeight: 700, textAlign: 'center' }}>Menos utilizados</td>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr style={{ border: '1px solid #d1c9b0' }}>
+                    <td style={{ padding: '6px 12px', fontWeight: 700, background: '#f5f0e8' }}>Competencia</td>
+                    <td style={{ padding: '6px 12px' }}>{masYMenos?.maxComp?.label ?? '-'}</td>
+                    <td style={{ padding: '6px 12px' }}>{masYMenos?.minComp?.label ?? '-'}</td>
+                  </tr>
+                  <tr style={{ border: '1px solid #d1c9b0' }}>
+                    <td style={{ padding: '6px 12px', fontWeight: 700, background: '#f5f0e8' }}>Estilo</td>
+                    <td style={{ padding: '6px 12px' }}>{masYMenos?.maxEst?.label ? masYMenos.maxEst.label.charAt(0).toUpperCase() + masYMenos.maxEst.label.slice(1).toLowerCase() : '-'}</td>
+                    <td style={{ padding: '6px 12px' }}>{masYMenos?.minEst?.label ? masYMenos.minEst.label.charAt(0).toUpperCase() + masYMenos.minEst.label.slice(1).toLowerCase() : '-'}</td>
+                  </tr>
+                </tbody>
+              </table>
+                  <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>COMPETENCIAS</div>
               {(() => {
                 const source = selectedCodigo
   ? datos.filter(d => String(d.codigo) === String(selectedCodigo))
@@ -750,7 +738,7 @@ const radarOptions = React.useMemo(() => {
 
                 <div style={{ width: 520, maxWidth: '100%', boxSizing: 'border-box', border: 'none', borderRadius: 12, padding: 14, background: 'linear-gradient(180deg,#ffffff,#fbfdff)', boxShadow: '0 8px 24px rgba(15,23,42,0.06)', display: 'flex', flexDirection: 'column' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a' }}>Competencias</div>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a' }}>COMPETENCIAS</div>
                   </div>
                   <div style={{ height: 1, background: '#e6eef8', marginBottom: 10, borderRadius: 4 }} />
 
@@ -818,7 +806,7 @@ const radarOptions = React.useMemo(() => {
               </div>
             </div>
             <div data-pdf-page>
-              <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>Estilos</div>
+              <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>ESTILOS</div>
               {(() => {
                 const source = selectedCodigo ? datos.filter(d => String(d.codigo) === String(selectedCodigo)) : [];
                 if (!source.length) return null;
