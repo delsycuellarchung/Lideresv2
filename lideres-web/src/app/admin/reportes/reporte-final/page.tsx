@@ -30,7 +30,10 @@ export default function ReporteFinalPage() {
       }
       clone.style.position = 'fixed';
       clone.style.left = '-9999px';
-      clone.style.top = '0';
+      clone.style.top = '-99999px';
+      clone.style.visibility = 'hidden';
+      clone.style.pointerEvents = 'none';
+      clone.style.zIndex = '-9999';
       document.body.appendChild(clone);
 
       // find explicit PDF page sections first (elements marked data-pdf-page),
@@ -43,16 +46,40 @@ export default function ReporteFinalPage() {
         const jsPDFClass: any = jspdfMod.jsPDF || jspdfMod.default || jspdfMod;
         const pdf = new jsPDFClass('p', 'mm', 'a4');
         const pdfWidth = pdf.internal.pageSize.getWidth();
-        const margin = 12; // mm
+        const margin = 20; // mm
 
         // helper to render an element into a canvas and add to pdf with margins
+        const pdfHeight = pdf.internal.pageSize.getHeight();
         const renderElementToPdf = async (element: HTMLElement, addNewPage: boolean) => {
           const canvas = await html2canvas(element as HTMLElement, { scale: 2 });
-          const imgData = canvas.toDataURL('image/png');
           const availableWidth = pdfWidth - margin * 2;
-          const imgHeightMm = (canvas.height * availableWidth) / canvas.width; // in mm relative to pdf width
-          if (addNewPage) pdf.addPage();
-          pdf.addImage(imgData, 'PNG', margin, margin, availableWidth, imgHeightMm);
+          const availableHeightMm = pdfHeight - margin * 2;
+          const pageHeightPx = (availableHeightMm * canvas.width) / availableWidth;
+
+          let offsetPx = 0;
+          let remainingPx = canvas.height;
+          let isFirstSlice = true;
+
+          while (remainingPx > 0) {
+            const sliceHeightPx = Math.min(pageHeightPx, remainingPx);
+            const sliceHeightMm = (sliceHeightPx * availableWidth) / canvas.width;
+
+            const sliceCanvas = document.createElement('canvas');
+            sliceCanvas.width = canvas.width;
+            sliceCanvas.height = sliceHeightPx;
+            const ctx = sliceCanvas.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(canvas, 0, offsetPx, canvas.width, sliceHeightPx, 0, 0, canvas.width, sliceHeightPx);
+            }
+            const sliceData = sliceCanvas.toDataURL('image/png');
+
+            if (!isFirstSlice || addNewPage) pdf.addPage();
+            pdf.addImage(sliceData, 'PNG', margin, margin, availableWidth, sliceHeightMm);
+
+            offsetPx += sliceHeightPx;
+            remainingPx -= sliceHeightPx;
+            isFirstSlice = false;
+          }
         };
 
         // prepare header pieces: show LIDER and number of evaluadores on separate lines
@@ -64,31 +91,72 @@ export default function ReporteFinalPage() {
           for (let i = 0; i < pages.length; i++) {
             const section = pages[i];
             const pageEl = document.createElement('div');
-            pageEl.style.width = '1200px';
+            pageEl.style.width = '1050px';
             pageEl.style.boxSizing = 'border-box';
-            pageEl.style.padding = '18px';
+            pageEl.style.padding = '0 18px 18px 18px';
             pageEl.style.background = '#ffffff';
             pageEl.style.color = '#000';
 
-            // add header and spacing: LIDER on first line, evaluadores count below (centered)
-            const spacer = document.createElement('div');
-            spacer.style.height = '8px';
-            pageEl.appendChild(spacer);
-            const leaderDiv = document.createElement('div');
-            leaderDiv.textContent = `LIDER: ${leaderName || '-'}`;
-            leaderDiv.style.fontSize = '14px';
-            leaderDiv.style.fontWeight = '700';
-            leaderDiv.style.marginBottom = '6px';
-            leaderDiv.style.textAlign = 'left';
-            leaderDiv.style.letterSpacing = '0.2px';
-            pageEl.appendChild(leaderDiv);
-            const evalDiv = document.createElement('div');
-            evalDiv.textContent = `Número de evaluadores: ${evalCount}`;
-            evalDiv.style.fontSize = '12px';
-            evalDiv.style.fontWeight = '600';
-            evalDiv.style.marginBottom = '14px';
-            evalDiv.style.textAlign = 'left';
-            pageEl.appendChild(evalDiv);
+            if (i === 0) {
+              // Barra superior con gradiente
+              const topBar = document.createElement('div');
+              topBar.style.cssText = `
+                background: linear-gradient(90deg, #4F46E5 0%, #06B6D4 100%);
+                height: 8px;
+                borderRadius: 6px 6px 0 0;
+                marginBottom: 0;
+              `;
+              pageEl.appendChild(topBar);
+
+              // Contenedor del header
+              const headerBox = document.createElement('div');
+              headerBox.style.cssText = `
+                background: linear-gradient(135deg, #f0f4ff 0%, #e0f2fe 100%);
+                border: 1px solid #c7d2fe;
+                border-top: none;
+                border-radius: 0 0 10px 10px;
+                padding: 18px 24px 16px 24px;
+                margin-bottom: 20px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+              `;
+
+              // Lado izquierdo: título + nombre
+              const leftCol = document.createElement('div');
+
+              const leaderDiv = document.createElement('div');
+              leaderDiv.textContent = `${leaderName || '-'}`;
+              leaderDiv.style.cssText = `
+                font-size: 20px;
+                font-weight: 800;
+                color: #0f172a;
+                letter-spacing: 0.3px;
+              `;
+              leftCol.appendChild(leaderDiv);
+              headerBox.appendChild(leftCol);
+
+              // Lado derecho: badge evaluadores
+              const badge = document.createElement('div');
+              badge.style.cssText = `
+                background: #4F46E5;
+                color: #fff;
+                border-radius: 12px;
+                padding: 10px 20px;
+                text-align: center;
+              `;
+              const badgeNum = document.createElement('div');
+              badgeNum.textContent = String(evalCount);
+              badgeNum.style.cssText = `font-size: 26px; font-weight: 800; line-height: 1;`;
+              const badgeLabel = document.createElement('div');
+              badgeLabel.textContent = 'Evaluadores';
+              badgeLabel.style.cssText = `font-size: 10px; font-weight: 600; letter-spacing: 0.8px; margin-top: 3px; opacity: 0.85;`;
+              badge.appendChild(badgeNum);
+              badge.appendChild(badgeLabel);
+              headerBox.appendChild(badge);
+
+              pageEl.appendChild(headerBox);
+            }
 
             // clone the section (which may include charts and tables)
             const sectionClone = section.cloneNode(true) as HTMLElement;
@@ -98,6 +166,10 @@ export default function ReporteFinalPage() {
 
             pageEl.style.position = 'fixed';
             pageEl.style.left = '-9999px';
+            pageEl.style.top = '-99999px';
+            clone.style.visibility = 'hidden';
+            clone.style.pointerEvents = 'none';
+            clone.style.zIndex = '-9999';
             document.body.appendChild(pageEl);
             await renderElementToPdf(pageEl, i > 0);
             try { document.body.removeChild(pageEl); } catch (e) { /* ignore */ }
@@ -109,29 +181,67 @@ export default function ReporteFinalPage() {
             const pageEl = document.createElement('div');
             pageEl.style.width = '1200px';
             pageEl.style.boxSizing = 'border-box';
-            pageEl.style.padding = '18px';
+            pageEl.style.padding = '0 18px 18px 18px';
             pageEl.style.background = '#ffffff';
             pageEl.style.color = '#000';
 
             // header: LIDER and number of evaluadores (centered) and extra top spacing
-            const spacer = document.createElement('div');
-            spacer.style.height = '10px';
-            pageEl.appendChild(spacer);
-            const leaderDivTbl = document.createElement('div');
-            leaderDivTbl.textContent = `LIDER: ${leaderName || '-'}`;
-            leaderDivTbl.style.fontSize = '14px';
-            leaderDivTbl.style.fontWeight = '700';
-            leaderDivTbl.style.marginBottom = '6px';
-            leaderDivTbl.style.textAlign = 'left';
-            leaderDivTbl.style.letterSpacing = '0.2px';
-            pageEl.appendChild(leaderDivTbl);
-            const evalDivTbl = document.createElement('div');
-            evalDivTbl.textContent = `Número de evaluadores: ${evalCount}`;
-            evalDivTbl.style.fontSize = '12px';
-            evalDivTbl.style.fontWeight = '600';
-            evalDivTbl.style.marginBottom = '18px';
-            evalDivTbl.style.textAlign = 'left';
-            pageEl.appendChild(evalDivTbl);
+            // Barra superior con gradiente
+              const topBarTbl = document.createElement('div');
+              topBarTbl.style.cssText = `
+                background: linear-gradient(90deg, #4F46E5 0%, #06B6D4 100%);
+                height: 8px;
+                border-radius: 6px 6px 0 0;
+                margin-bottom: 0;
+              `;
+              pageEl.appendChild(topBarTbl);
+
+              // Header box
+              const headerBoxTbl = document.createElement('div');
+              headerBoxTbl.style.cssText = `
+                background: linear-gradient(135deg, #f0f4ff 0%, #e0f2fe 100%);
+                border: 1px solid #c7d2fe;
+                border-top: none;
+                border-radius: 0 0 10px 10px;
+                padding: 18px 24px 16px 24px;
+                margin-bottom: 20px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+              `;
+
+              const leftColTbl = document.createElement('div');
+
+              const leaderDivTbl = document.createElement('div');
+              leaderDivTbl.textContent = `${leaderName || '-'}`;
+              leaderDivTbl.style.cssText = `
+                font-size: 20px;
+                font-weight: 800;
+                color: #0f172a;
+                letter-spacing: 0.3px;
+              `;
+              leftColTbl.appendChild(leaderDivTbl);
+              headerBoxTbl.appendChild(leftColTbl);
+
+              const badgeTbl = document.createElement('div');
+              badgeTbl.style.cssText = `
+                background: #4F46E5;
+                color: #fff;
+                border-radius: 12px;
+                padding: 10px 20px;
+                text-align: center;
+              `;
+              const badgeNumTbl = document.createElement('div');
+              badgeNumTbl.textContent = String(evalCount);
+              badgeNumTbl.style.cssText = `font-size: 26px; font-weight: 800; line-height: 1;`;
+              const badgeLabelTbl = document.createElement('div');
+              badgeLabelTbl.textContent = 'Evaluadores';
+              badgeLabelTbl.style.cssText = `font-size: 10px; font-weight: 600; letter-spacing: 0.8px; margin-top: 3px; opacity: 0.85;`;
+              badgeTbl.appendChild(badgeNumTbl);
+              badgeTbl.appendChild(badgeLabelTbl);
+              headerBoxTbl.appendChild(badgeTbl);
+
+              pageEl.appendChild(headerBoxTbl);
 
             // clone the table into the page
             const tableClone = tbl.cloneNode(true) as HTMLElement;
@@ -143,6 +253,10 @@ export default function ReporteFinalPage() {
             // append off-screen, render, then remove
             pageEl.style.position = 'fixed';
             pageEl.style.left = '-9999px';
+            pageEl.style.top = '-99999px';
+            clone.style.visibility = 'hidden';
+      clone.style.pointerEvents = 'none';
+      clone.style.zIndex = '-9999';
             document.body.appendChild(pageEl);
             await renderElementToPdf(pageEl, i > 0);
             try { document.body.removeChild(pageEl); } catch (e) { /* ignore */ }
@@ -319,60 +433,49 @@ export default function ReporteFinalPage() {
         </div>
       </div>
       <div style={{ marginTop: 20 }}>
-        <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-          <div data-pdf-page style={{ flex: '1 1 420px', minWidth: 320, background: '#fff', padding: 12, borderRadius: 8, border: '1px solid rgba(15,23,42,0.04)' }}>
-            <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 8 }}>Afirmaciones — Competencias</div>
-            <div style={{ height: 1, background: '#e6eef8', marginBottom: 10, borderRadius: 4 }} />
-            {afCompetencias.length ? (
-              <div style={{ overflow: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                  <thead>
-                    <tr style={{ background: '#f3f4f6', fontWeight: 700 }}>
-                      <td style={{ padding: '8px', border: '1px solid #e6eef8' }}>Afirmación</td>
-                      <td style={{ padding: '8px', border: '1px solid #e6eef8', width: 120, textAlign: 'center' }}>Promedio</td>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {afCompetencias.map((r:any, idx:number) => (
-                      <tr key={idx}>
-                        <td style={{ padding: '8px', border: '1px solid #eef2f7' }}>{r.pregunta}</td>
-                        <td style={{ padding: '8px', border: '1px solid #eef2f7', textAlign: 'center' }}>{r.promedio ?? '-'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div style={{ color: '#6b7280' }}>No hay datos de afirmaciones de competencias para este evaluado.</div>
-            )}
+        <div data-pdf-page style={{ background: '#fff', padding: 16, borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 2px 12px rgba(15,23,42,0.06)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+            <div style={{ width: 4, height: 22, borderRadius: 4, background: 'linear-gradient(180deg,#4F46E5,#06B6D4)' }} />
+            <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a', letterSpacing: '0.3px' }}>Afirmaciones</div>
           </div>
-
-          <div data-pdf-page style={{ flex: '1 1 320px', minWidth: 280, background: '#fff', padding: 12, borderRadius: 8, border: '1px solid rgba(15,23,42,0.04)' }}>
-            <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 8 }}>Afirmaciones — Estilos</div>
-            <div style={{ height: 1, background: '#e6eef8', marginBottom: 10, borderRadius: 4 }} />
-            {afEstilos.length ? (
-              <div style={{ overflow: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                  <thead>
-                    <tr style={{ background: '#f3f4f6', fontWeight: 700 }}>
-                      <td style={{ padding: '8px', border: '1px solid #e6eef8' }}>Afirmación</td>
-                      <td style={{ padding: '8px', border: '1px solid #e6eef8', width: 120, textAlign: 'center' }}>Promedio</td>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {afEstilos.map((r:any, idx:number) => (
-                      <tr key={idx}>
-                        <td style={{ padding: '8px', border: '1px solid #eef2f7' }}>{r.pregunta}</td>
-                        <td style={{ padding: '8px', border: '1px solid #eef2f7', textAlign: 'center' }}>{r.promedio ?? '-'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div style={{ color: '#6b7280' }}>No hay datos de afirmaciones de estilos para este evaluado.</div>
+          <div style={{ height: 1, background: 'linear-gradient(90deg,#4F46E5,#e2e8f0)', marginBottom: 14, borderRadius: 4 }} />
+          {(afCompetencias.length || afEstilos.length) ? (
+            <div style={{ overflow: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, tableLayout: 'fixed' }}>
+                          <colgroup>
+                            <col style={{ width: '85%' }} />
+                            <col style={{ width: '15%' }} />
+                          </colgroup>
+                          <thead>
+                            <tr style={{ background: 'linear-gradient(90deg,#4F46E5,#06B6D4)' }}>
+                              <td style={{ padding: '6px 10px', color: '#fff', fontWeight: 700, borderRadius: '6px 0 0 0' }}>Afirmación</td>
+                              <td style={{ padding: '6px 10px', color: '#fff', fontWeight: 700, textAlign: 'center', borderRadius: '0 6px 0 0' }}>Promedio</td>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {[...afCompetencias.map((r:any) => ({ ...r, tipo: 'Competencia' })), ...afEstilos.map((r:any) => ({ ...r, tipo: 'Estilo' }))]
+                              .sort((a, b) => String(a.pregunta || '').localeCompare(String(b.pregunta || ''), 'es'))
+                              .map((r:any, idx:number) => {
+                                const val = typeof r.promedio === 'number' ? r.promedio : null;
+                                const bg = val === null ? 'transparent' : val >= 4.2 ? '#d1fae5' : val >= 3.4 ? '#fef3c7' : '#fee2e2';
+                                const color = val === null ? '#6b7280' : val >= 4.2 ? '#065f46' : val >= 3.4 ? '#92400e' : '#991b1b';
+                                return (
+                                  <tr key={idx} style={{ background: idx % 2 === 0 ? '#ffffff' : '#f8fafc', borderBottom: '1px solid #eef2f7' }}>
+                                    <td style={{ padding: '5px 10px', color: '#1e293b', lineHeight: 1.4, wordWrap: 'break-word', whiteSpace: 'normal' }}>{r.pregunta}</td>
+                                    <td style={{ padding: '5px 10px', textAlign: 'center' }}>
+                                      <span style={{ display: 'inline-block', minWidth: 40, padding: '2px 8px', borderRadius: 6, background: bg, color, fontWeight: 700, fontSize: 11 }}>
+                                        {val !== null ? Number(val).toFixed(2) : '-'}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                          </tbody>
+                        </table>
+                  </div>
+                ) : (
+              <div style={{ color: '#6b7280', padding: 12 }}>No hay datos de afirmaciones para este evaluado.</div>
             )}
-          </div>
         </div>
       </div>
     </section>
