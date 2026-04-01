@@ -354,28 +354,63 @@ export default function ReportesPage() {
             const outer = (searchInput.closest('div') && searchInput.closest('div')!.parentElement) || searchInput.closest('div');
             if (outer) {
               outer.innerHTML = '';
-              // create centered leader + evaluadores count
+              // Barra superior con gradiente (mismo estilo que reporte-final)
+              const topBar = document.createElement('div');
+              topBar.style.cssText = `
+                background: linear-gradient(90deg, #4F46E5 0%, #06B6D4 100%);
+                height: 8px;
+                borderRadius: 6px 6px 0 0;
+                marginBottom: 0;
+              `;
+              outer.appendChild(topBar);
+
+              // Contenedor del header con gradiente y borde
+              const headerBox = document.createElement('div');
+              headerBox.style.cssText = `
+                background: linear-gradient(135deg, #f0f4ff 0%, #e0f2fe 100%);
+                border: 1px solid #c7d2fe;
+                border-top: none;
+                border-radius: 0 0 10px 10px;
+                padding: 18px 24px 16px 24px;
+                margin-bottom: 20px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+              `;
+
+              const leftCol = document.createElement('div');
               const leaderDiv = document.createElement('div');
-              leaderDiv.style.fontSize = '20px';
-              leaderDiv.style.fontWeight = '700';
-              leaderDiv.style.margin = '0 auto 6px';
-              leaderDiv.style.width = '100%';
-              leaderDiv.style.textAlign = 'left';
-              leaderDiv.textContent = 'LIDER: ' + (displayName || '');
+              leaderDiv.textContent = `${displayName || '-'}`;
+              leaderDiv.style.cssText = `
+                font-size: 20px;
+                font-weight: 800;
+                color: #0f172a;
+                letter-spacing: 0.3px;
+              `;
+              leftCol.appendChild(leaderDiv);
 
               const evalCount = sel && typeof sel.evaluadores === 'number' ? sel.evaluadores : 0;
-              const evalDiv = document.createElement('div');
-              evalDiv.style.fontSize = '13px';
-              evalDiv.style.fontWeight = '600';
-              evalDiv.style.margin = '0 auto 8px';
-              evalDiv.style.width = '100%';
-              evalDiv.style.textAlign = 'left';
-              evalDiv.textContent = `Número de evaluadores: ${evalCount}`;
+              const badge = document.createElement('div');
+              badge.style.cssText = `
+                background: #4F46E5;
+                color: #fff;
+                border-radius: 12px;
+                padding: 10px 20px;
+                text-align: center;
+              `;
+              const badgeNum = document.createElement('div');
+              badgeNum.textContent = String(evalCount);
+              badgeNum.style.cssText = `font-size: 26px; font-weight: 800; line-height: 1;`;
+              const badgeLabel = document.createElement('div');
+              badgeLabel.textContent = 'Evaluadores';
+              badgeLabel.style.cssText = `font-size: 10px; font-weight: 600; letter-spacing: 0.8px; margin-top: 3px; opacity: 0.85;`;
+              badge.appendChild(badgeNum);
+              badge.appendChild(badgeLabel);
 
-              // ensure the outer container centers its children
-              try { outer.style.display = 'flex'; outer.style.flexDirection = 'column'; outer.style.justifyContent = 'center'; outer.style.alignItems = 'center'; } catch (e) {}
-              outer.appendChild(leaderDiv);
-              outer.appendChild(evalDiv);
+              try { outer.style.display = 'flex'; outer.style.flexDirection = 'column'; outer.style.justifyContent = 'center'; outer.style.alignItems = 'stretch'; } catch (e) {}
+              headerBox.appendChild(leftCol);
+              headerBox.appendChild(badge);
+              outer.appendChild(headerBox);
             }
           }
         } catch (err) {
@@ -448,8 +483,54 @@ export default function ReportesPage() {
           const wrapper = document.createElement('div');
           wrapper.style.width = '1200px'; wrapper.style.boxSizing = 'border-box'; wrapper.style.padding = '18px'; wrapper.style.background = '#fff';
           if (i === 0) {
-            const leaderHeader = document.createElement('div'); leaderHeader.textContent = `LIDER: ${displayName}`; leaderHeader.style.fontWeight = '800'; leaderHeader.style.fontSize = '16px'; leaderHeader.style.marginBottom = '6px'; leaderHeader.style.textAlign = 'left'; wrapper.appendChild(leaderHeader);
-            const evalHeader = document.createElement('div'); evalHeader.textContent = `Número de evaluadores: ${evalCountForDisplay}`; evalHeader.style.fontWeight = '700'; evalHeader.style.fontSize = '13px'; evalHeader.style.marginBottom = '12px'; evalHeader.style.textAlign = 'left'; wrapper.appendChild(evalHeader);
+            // Barra superior con gradiente (igual reporte-final)
+            const topBar = document.createElement('div');
+            topBar.style.cssText = `
+                background: linear-gradient(90deg, #4F46E5 0%, #06B6D4 100%);
+                height: 8px;
+                borderRadius: 6px 6px 0 0;
+                marginBottom: 0;
+              `;
+            wrapper.appendChild(topBar);
+
+            const headerBox = document.createElement('div');
+            headerBox.style.cssText = `
+                background: linear-gradient(135deg, #f0f4ff 0%, #e0f2fe 100%);
+                border: 1px solid #c7d2fe;
+                border-top: none;
+                border-radius: 0 0 10px 10px;
+                padding: 18px 24px 16px 24px;
+                margin-bottom: 20px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+              `;
+
+            const leftCol = document.createElement('div');
+            const leaderDiv = document.createElement('div');
+            leaderDiv.textContent = `${displayName || '-'}`;
+            leaderDiv.style.cssText = `
+                font-size: 20px;
+                font-weight: 800;
+                color: #0f172a;
+                letter-spacing: 0.3px;
+              `;
+            leftCol.appendChild(leaderDiv);
+
+            const badge = document.createElement('div');
+            badge.style.cssText = `
+                background: #4F46E5;
+                color: #fff;
+                border-radius: 12px;
+                padding: 10px 20px;
+                text-align: center;
+              `;
+            const badgeNum = document.createElement('div'); badgeNum.textContent = String(evalCountForDisplay); badgeNum.style.cssText = 'font-size:26px; font-weight:800; line-height:1;';
+            const badgeLabel = document.createElement('div'); badgeLabel.textContent = 'Evaluadores'; badgeLabel.style.cssText = 'font-size:10px; font-weight:600; letter-spacing:0.8px; margin-top:3px; opacity:0.85;';
+            badge.appendChild(badgeNum); badge.appendChild(badgeLabel);
+
+            headerBox.appendChild(leftCol); headerBox.appendChild(badge);
+            wrapper.appendChild(headerBox);
           }
           const cloneSec = sections[i].cloneNode(true) as HTMLElement; cloneSec.style.width = '100%'; wrapper.appendChild(cloneSec);
           wrapper.style.position = 'fixed'; wrapper.style.left = '-9999px'; document.body.appendChild(wrapper);
