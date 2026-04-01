@@ -22,9 +22,9 @@ export default function ReporteFinalPage() {
       const el = reportRef.current as HTMLElement;
       const clone = el.cloneNode(true) as HTMLElement;
 
-      // remove interactive controls so they don't appear in the PDF
+      // remove interactive controls and form labels so they don't appear in the PDF
       try {
-        clone.querySelectorAll('input, button, select, textarea, datalist').forEach(n => n.remove());
+        clone.querySelectorAll('input, button, select, textarea, datalist, label').forEach(n => n.remove());
       } catch (err) {
         // ignore DOM manipulation errors
       }
@@ -33,20 +33,153 @@ export default function ReporteFinalPage() {
       clone.style.top = '0';
       document.body.appendChild(clone);
 
-      const canvas = await html2canvas(clone as HTMLElement, { scale: 2 });
-      const imgData = canvas.toDataURL('image/png');
-      const jspdfMod: any = await import('jspdf').catch(() => null);
-      if (!jspdfMod) { alert('Instala jspdf (npm install jspdf) para descargar PDF.'); try { document.body.removeChild(clone); } catch(e){} return; }
-      const jsPDFClass: any = jspdfMod.jsPDF || jspdfMod.default || jspdfMod;
-      const pdf = new jsPDFClass('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      const timestamp = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
-      const fn = `reporte-final-${codigo || 'sin-codigo'}-${timestamp}.pdf`;
-      pdf.save(fn);
+      // find explicit PDF page sections first (elements marked data-pdf-page),
+      // otherwise fall back to capturing each table separately
+      try {
+      const pages = Array.from(clone.querySelectorAll('[data-pdf-page]')) as HTMLElement[];
+      const tables = pages.length ? [] : Array.from(clone.querySelectorAll('table')) as HTMLTableElement[];
+        const jspdfMod: any = await import('jspdf').catch(() => null);
+        if (!jspdfMod) { alert('Instala jspdf (npm install jspdf) para descargar PDF.'); try { document.body.removeChild(clone); } catch(e){} return; }
+        const jsPDFClass: any = jspdfMod.jsPDF || jspdfMod.default || jspdfMod;
+        const pdf = new jsPDFClass('p', 'mm', 'a4');
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const margin = 12; // mm
 
-      try { document.body.removeChild(clone); } catch(e) { /* ignore */ }
+        // helper to render an element into a canvas and add to pdf with margins
+        const renderElementToPdf = async (element: HTMLElement, addNewPage: boolean) => {
+          const canvas = await html2canvas(element as HTMLElement, { scale: 2 });
+          const imgData = canvas.toDataURL('image/png');
+          const availableWidth = pdfWidth - margin * 2;
+          const imgHeightMm = (canvas.height * availableWidth) / canvas.width; // in mm relative to pdf width
+          if (addNewPage) pdf.addPage();
+          pdf.addImage(imgData, 'PNG', margin, margin, availableWidth, imgHeightMm);
+        };
+
+        // prepare header pieces: show LIDER and number of evaluadores on separate lines
+        const leaderName = String(nombre || '');
+        const evalCount = Number(evaluadores || 0);
+
+        if (pages.length) {
+          // For each marked page (which may include chart + table), render it as a separate PDF page
+          for (let i = 0; i < pages.length; i++) {
+            const section = pages[i];
+            const pageEl = document.createElement('div');
+            pageEl.style.width = '1200px';
+            pageEl.style.boxSizing = 'border-box';
+            pageEl.style.padding = '18px';
+            pageEl.style.background = '#ffffff';
+            pageEl.style.color = '#000';
+
+            // add header and spacing: LIDER on first line, evaluadores count below (centered)
+            const spacer = document.createElement('div');
+            spacer.style.height = '8px';
+            pageEl.appendChild(spacer);
+            const leaderDiv = document.createElement('div');
+            leaderDiv.textContent = `LIDER: ${leaderName || '-'}`;
+            leaderDiv.style.fontSize = '14px';
+            leaderDiv.style.fontWeight = '700';
+            leaderDiv.style.marginBottom = '6px';
+            leaderDiv.style.textAlign = 'left';
+            leaderDiv.style.letterSpacing = '0.2px';
+            pageEl.appendChild(leaderDiv);
+            const evalDiv = document.createElement('div');
+            evalDiv.textContent = `Número de evaluadores: ${evalCount}`;
+            evalDiv.style.fontSize = '12px';
+            evalDiv.style.fontWeight = '600';
+            evalDiv.style.marginBottom = '14px';
+            evalDiv.style.textAlign = 'left';
+            pageEl.appendChild(evalDiv);
+
+            // clone the section (which may include charts and tables)
+            const sectionClone = section.cloneNode(true) as HTMLElement;
+            // ensure full width for capture
+            sectionClone.style.width = '100%';
+            pageEl.appendChild(sectionClone);
+
+            pageEl.style.position = 'fixed';
+            pageEl.style.left = '-9999px';
+            document.body.appendChild(pageEl);
+            await renderElementToPdf(pageEl, i > 0);
+            try { document.body.removeChild(pageEl); } catch (e) { /* ignore */ }
+          }
+        } else if (tables.length) {
+          // For each table, create a temporary page container that includes header + some spacing + the table clone
+          for (let i = 0; i < tables.length; i++) {
+            const tbl = tables[i];
+            const pageEl = document.createElement('div');
+            pageEl.style.width = '1200px';
+            pageEl.style.boxSizing = 'border-box';
+            pageEl.style.padding = '18px';
+            pageEl.style.background = '#ffffff';
+            pageEl.style.color = '#000';
+
+            // header: LIDER and number of evaluadores (centered) and extra top spacing
+            const spacer = document.createElement('div');
+            spacer.style.height = '10px';
+            pageEl.appendChild(spacer);
+            const leaderDivTbl = document.createElement('div');
+            leaderDivTbl.textContent = `LIDER: ${leaderName || '-'}`;
+            leaderDivTbl.style.fontSize = '14px';
+            leaderDivTbl.style.fontWeight = '700';
+            leaderDivTbl.style.marginBottom = '6px';
+            leaderDivTbl.style.textAlign = 'left';
+            leaderDivTbl.style.letterSpacing = '0.2px';
+            pageEl.appendChild(leaderDivTbl);
+            const evalDivTbl = document.createElement('div');
+            evalDivTbl.textContent = `Número de evaluadores: ${evalCount}`;
+            evalDivTbl.style.fontSize = '12px';
+            evalDivTbl.style.fontWeight = '600';
+            evalDivTbl.style.marginBottom = '18px';
+            evalDivTbl.style.textAlign = 'left';
+            pageEl.appendChild(evalDivTbl);
+
+            // clone the table into the page
+            const tableClone = tbl.cloneNode(true) as HTMLElement;
+            tableClone.style.width = '100%';
+            tableClone.style.borderCollapse = 'collapse';
+            // ensure table cells have visible backgrounds for capture
+            pageEl.appendChild(tableClone);
+
+            // append off-screen, render, then remove
+            pageEl.style.position = 'fixed';
+            pageEl.style.left = '-9999px';
+            document.body.appendChild(pageEl);
+            await renderElementToPdf(pageEl, i > 0);
+            try { document.body.removeChild(pageEl); } catch (e) { /* ignore */ }
+          }
+        } else {
+          // fallback: render whole cloned report as single page
+          await renderElementToPdf(clone as HTMLElement, false);
+        }
+
+        const timestamp = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+        const safeName = String(nombre || codigo || 'sin-nombre').trim().replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_\-]/g, '');
+        const fn = `reporte_final-${safeName}-${timestamp}.pdf`;
+        pdf.save(fn);
+        try { document.body.removeChild(clone); } catch(e) { /* ignore */ }
+      } catch (err) {
+        // if anything fails, fallback to capturing the whole clone as one image
+        try {
+          const canvas = await html2canvas(clone as HTMLElement, { scale: 2 });
+          const imgData = canvas.toDataURL('image/png');
+          const jspdfMod2: any = await import('jspdf').catch(() => null);
+          if (!jspdfMod2) { alert('Instala jspdf (npm install jspdf) para descargar PDF.'); try { document.body.removeChild(clone); } catch(e){} return; }
+          const jsPDFClass2: any = jspdfMod2.jsPDF || jspdfMod2.default || jspdfMod2;
+          const pdf2 = new jsPDFClass2('p', 'mm', 'a4');
+          const pdfWidth2 = pdf2.internal.pageSize.getWidth();
+          const pdfHeight2 = (canvas.height * pdfWidth2) / canvas.width;
+          pdf2.addImage(imgData, 'PNG', 0, 0, pdfWidth2, pdfHeight2);
+          const timestamp2 = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+          const safeName2 = String(nombre || codigo || 'sin-nombre').trim().replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_\-]/g, '');
+          const fn2 = `reporte_final-${safeName2}-${timestamp2}.pdf`;
+          pdf2.save(fn2);
+          try { document.body.removeChild(clone); } catch(e) { /* ignore */ }
+        } catch (e) {
+          console.error('Error generando PDF fallback', e);
+          alert('Error al generar PDF. Revisa la consola.');
+          try { document.body.removeChild(clone); } catch(e) { /* ignore */ }
+        }
+      }
     } catch (e) {
       console.error('Error generando PDF', e);
       alert('Error al generar PDF. Revisa la consola.');
@@ -187,7 +320,7 @@ export default function ReporteFinalPage() {
       </div>
       <div style={{ marginTop: 20 }}>
         <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-          <div style={{ flex: '1 1 420px', minWidth: 320, background: '#fff', padding: 12, borderRadius: 8, border: '1px solid rgba(15,23,42,0.04)' }}>
+          <div data-pdf-page style={{ flex: '1 1 420px', minWidth: 320, background: '#fff', padding: 12, borderRadius: 8, border: '1px solid rgba(15,23,42,0.04)' }}>
             <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 8 }}>Afirmaciones — Competencias</div>
             <div style={{ height: 1, background: '#e6eef8', marginBottom: 10, borderRadius: 4 }} />
             {afCompetencias.length ? (
@@ -195,15 +328,13 @@ export default function ReporteFinalPage() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead>
                     <tr style={{ background: '#f3f4f6', fontWeight: 700 }}>
-                      <td style={{ padding: '8px', border: '1px solid #e6eef8' }}>Código</td>
                       <td style={{ padding: '8px', border: '1px solid #e6eef8' }}>Afirmación</td>
                       <td style={{ padding: '8px', border: '1px solid #e6eef8', width: 120, textAlign: 'center' }}>Promedio</td>
                     </tr>
                   </thead>
                   <tbody>
-                    {afCompetencias.map((r:any) => (
-                      <tr key={r.codigo}>
-                        <td style={{ padding: '8px', border: '1px solid #eef2f7' }}>{r.codigo}</td>
+                    {afCompetencias.map((r:any, idx:number) => (
+                      <tr key={idx}>
                         <td style={{ padding: '8px', border: '1px solid #eef2f7' }}>{r.pregunta}</td>
                         <td style={{ padding: '8px', border: '1px solid #eef2f7', textAlign: 'center' }}>{r.promedio ?? '-'}</td>
                       </tr>
@@ -216,7 +347,7 @@ export default function ReporteFinalPage() {
             )}
           </div>
 
-          <div style={{ flex: '1 1 320px', minWidth: 280, background: '#fff', padding: 12, borderRadius: 8, border: '1px solid rgba(15,23,42,0.04)' }}>
+          <div data-pdf-page style={{ flex: '1 1 320px', minWidth: 280, background: '#fff', padding: 12, borderRadius: 8, border: '1px solid rgba(15,23,42,0.04)' }}>
             <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 8 }}>Afirmaciones — Estilos</div>
             <div style={{ height: 1, background: '#e6eef8', marginBottom: 10, borderRadius: 4 }} />
             {afEstilos.length ? (
@@ -224,15 +355,13 @@ export default function ReporteFinalPage() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead>
                     <tr style={{ background: '#f3f4f6', fontWeight: 700 }}>
-                      <td style={{ padding: '8px', border: '1px solid #e6eef8' }}>Código</td>
                       <td style={{ padding: '8px', border: '1px solid #e6eef8' }}>Afirmación</td>
                       <td style={{ padding: '8px', border: '1px solid #e6eef8', width: 120, textAlign: 'center' }}>Promedio</td>
                     </tr>
                   </thead>
                   <tbody>
-                    {afEstilos.map((r:any) => (
-                      <tr key={r.codigo}>
-                        <td style={{ padding: '8px', border: '1px solid #eef2f7' }}>{r.codigo}</td>
+                    {afEstilos.map((r:any, idx:number) => (
+                      <tr key={idx}>
                         <td style={{ padding: '8px', border: '1px solid #eef2f7' }}>{r.pregunta}</td>
                         <td style={{ padding: '8px', border: '1px solid #eef2f7', textAlign: 'center' }}>{r.promedio ?? '-'}</td>
                       </tr>
