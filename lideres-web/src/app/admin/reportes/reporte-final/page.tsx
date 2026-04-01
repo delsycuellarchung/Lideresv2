@@ -1,5 +1,6 @@
 "use client";
 import React from "react";
+import { mapLabelToNumeric } from '@/lib/scaleMapper';
 
 export default function ReporteFinalPage() {
   const [codigo, setCodigo] = React.useState('');
@@ -39,18 +40,18 @@ export default function ReporteFinalPage() {
               const afirmaciones = Array.isArray(fJson.afirmaciones) ? fJson.afirmaciones : [];
               // filter entries for this evaluado
               const entries = allResponses.filter((r: any) => String(r.evaluado_codigo || r.evaluadoCodigo || r.token || '').trim() === String(codigo).trim());
-              // helper mapLabelToNumeric logic: import mapping from scaleMapper might not be available here, so implement lightweight mapper
+              // use shared mapper for consistency with other reports
               const mapLabelToNumericLocal = (v: any) => {
                 if (v === null || v === undefined) return null;
                 if (typeof v === 'number') return isNaN(v) ? null : v;
                 const s = String(v).trim();
                 if (!s) return null;
-                // try numeric
+                // try numeric first
                 const n = Number(s);
                 if (!isNaN(n)) return n;
-                // common labels
-                const map: Record<string, number> = { 'Muy en desacuerdo': 1, 'En desacuerdo': 2, 'Neutral': 3, 'De acuerdo': 4, 'Muy de acuerdo': 5 };
-                if (map[s]) return map[s];
+                // delegate to shared mapper which knows project-specific labels
+                const mapped = mapLabelToNumeric(s);
+                if (mapped !== null) return mapped;
                 // fallback: extract first digit
                 const m = s.match(/\d+(?:\.\d+)?/);
                 return m ? Number(m[0]) : null;
@@ -63,7 +64,19 @@ export default function ReporteFinalPage() {
                   if (raw === undefined || raw === null) {
                     // attempt fallback comp-<index>
                     const globalIdx = afirmaciones.findIndex((af: any) => String(af.codigo) === String(code));
-                    if (globalIdx >= 0) raw = r.responses?.[`comp-${globalIdx}`];
+                    if (globalIdx >= 0 && (r.responses?.[`comp-${globalIdx}`] !== undefined)) raw = r.responses?.[`comp-${globalIdx}`];
+                    // as extra fallback, try to find any key that contains the code string
+                    if ((raw === undefined || raw === null) && r.responses) {
+                      const keys = Object.keys(r.responses || {});
+                      for (let k of keys) {
+                        if (!k) continue;
+                        // match exact, endsWith or contains
+                        if (k === code || k.endsWith(String(code)) || k.includes(String(code))) {
+                          raw = r.responses[k];
+                          break;
+                        }
+                      }
+                    }
                   }
                   const num = mapLabelToNumericLocal(raw);
                   if (typeof num === 'number' && !isNaN(num)) vals.push(num);
@@ -82,17 +95,20 @@ export default function ReporteFinalPage() {
                 else competenciaAfs.push(row);
               });
 
-              setAfCompetencias(competenciaAfs.filter(r => r.promedio !== null));
-              setAfEstilos(estiloAfs.filter(r => r.promedio !== null));
+              // show all afirmaciones in their respective tables, even if promedio is null
+              setAfCompetencias(competenciaAfs);
+              setAfEstilos(estiloAfs);
               // optionally set nombre/evaluadores from entries
               if (entries.length) {
                 const first = entries[0];
-                const name = first.evaluado_nombre || first.evaluadoNombre || '';
-                setNombre(name || nombre);
+                const name = first.evaluado_nombre || first.evaluadoNombre || first.evaluadoNombreCompleto || '';
+                setNombre(name || '');
                 // compute unique evaluadores
-                const evalSet = new Set(entries.map((e:any) => String(e.evaluator_name || e.evaluatorName || '').trim()));
-                setEvaluadores(evalSet.size || evaluadores);
+                const evalSet = new Set(entries.map((e:any) => String(e.evaluator_name || e.evaluatorName || e.evaluador || '').trim()).filter(s => !!s));
+                setEvaluadores(evalSet.size || 0);
               }
+              // debug: print counts
+              try { console.debug('[ReporteFinal] afirmaciones:', afirmaciones.length, 'entradas:', entries.length, 'competencias:', competenciaAfs.length, 'estilos:', estiloAfs.length); } catch(e){}
             } catch (e) {
               console.warn('Error cargando datos', e);
             } finally { setLoading(false); }
@@ -122,6 +138,67 @@ export default function ReporteFinalPage() {
               placeholder="0"
               style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid rgba(15,23,42,0.08)', width: 120, textAlign: 'center', background: '#fff', color: '#0f172a' }}
             />
+          </div>
+        </div>
+      </div>
+      <div style={{ marginTop: 20 }}>
+        <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          <div style={{ flex: '1 1 420px', minWidth: 320, background: '#fff', padding: 12, borderRadius: 8, border: '1px solid rgba(15,23,42,0.04)' }}>
+            <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 8 }}>Afirmaciones — Competencias</div>
+            <div style={{ height: 1, background: '#e6eef8', marginBottom: 10, borderRadius: 4 }} />
+            {afCompetencias.length ? (
+              <div style={{ overflow: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: '#f3f4f6', fontWeight: 700 }}>
+                      <td style={{ padding: '8px', border: '1px solid #e6eef8' }}>Código</td>
+                      <td style={{ padding: '8px', border: '1px solid #e6eef8' }}>Afirmación</td>
+                      <td style={{ padding: '8px', border: '1px solid #e6eef8', width: 120, textAlign: 'center' }}>Promedio</td>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {afCompetencias.map((r:any) => (
+                      <tr key={r.codigo}>
+                        <td style={{ padding: '8px', border: '1px solid #eef2f7' }}>{r.codigo}</td>
+                        <td style={{ padding: '8px', border: '1px solid #eef2f7' }}>{r.pregunta}</td>
+                        <td style={{ padding: '8px', border: '1px solid #eef2f7', textAlign: 'center' }}>{r.promedio ?? '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div style={{ color: '#6b7280' }}>No hay datos de afirmaciones de competencias para este evaluado.</div>
+            )}
+          </div>
+
+          <div style={{ flex: '1 1 320px', minWidth: 280, background: '#fff', padding: 12, borderRadius: 8, border: '1px solid rgba(15,23,42,0.04)' }}>
+            <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 8 }}>Afirmaciones — Estilos</div>
+            <div style={{ height: 1, background: '#e6eef8', marginBottom: 10, borderRadius: 4 }} />
+            {afEstilos.length ? (
+              <div style={{ overflow: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: '#f3f4f6', fontWeight: 700 }}>
+                      <td style={{ padding: '8px', border: '1px solid #e6eef8' }}>Código</td>
+                      <td style={{ padding: '8px', border: '1px solid #e6eef8' }}>Afirmación</td>
+                      <td style={{ padding: '8px', border: '1px solid #e6eef8', width: 120, textAlign: 'center' }}>Promedio</td>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {afEstilos.map((r:any) => (
+                      <tr key={r.codigo}>
+                        <td style={{ padding: '8px', border: '1px solid #eef2f7' }}>{r.codigo}</td>
+                        <td style={{ padding: '8px', border: '1px solid #eef2f7' }}>{r.pregunta}</td>
+                        <td style={{ padding: '8px', border: '1px solid #eef2f7', textAlign: 'center' }}>{r.promedio ?? '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div style={{ color: '#6b7280' }}>No hay datos de afirmaciones de estilos para este evaluado.</div>
+            )}
           </div>
         </div>
       </div>
