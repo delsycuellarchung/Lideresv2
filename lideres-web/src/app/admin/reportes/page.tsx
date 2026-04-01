@@ -353,17 +353,29 @@ export default function ReportesPage() {
             // prefer replacing the parent that contains both label and input
             const outer = (searchInput.closest('div') && searchInput.closest('div')!.parentElement) || searchInput.closest('div');
             if (outer) {
-              const title = document.createElement('div');
-              title.style.fontSize = '20px';
-              title.style.fontWeight = '700';
-              title.style.margin = '0 auto 8px';
-              title.style.width = '100%';
-              title.style.textAlign = 'center';
-              title.textContent = 'LIDER: ' + (displayName || '');
               outer.innerHTML = '';
+              // create centered leader + evaluadores count
+              const leaderDiv = document.createElement('div');
+              leaderDiv.style.fontSize = '20px';
+              leaderDiv.style.fontWeight = '700';
+              leaderDiv.style.margin = '0 auto 6px';
+              leaderDiv.style.width = '100%';
+              leaderDiv.style.textAlign = 'center';
+              leaderDiv.textContent = 'LIDER: ' + (displayName || '');
+
+              const evalCount = sel && typeof sel.evaluadores === 'number' ? sel.evaluadores : 0;
+              const evalDiv = document.createElement('div');
+              evalDiv.style.fontSize = '13px';
+              evalDiv.style.fontWeight = '600';
+              evalDiv.style.margin = '0 auto 8px';
+              evalDiv.style.width = '100%';
+              evalDiv.style.textAlign = 'center';
+              evalDiv.textContent = `Número de evaluadores: ${evalCount}`;
+
               // ensure the outer container centers its children
-              try { outer.style.display = 'flex'; outer.style.justifyContent = 'center'; outer.style.alignItems = 'center'; } catch (e) {}
-              outer.appendChild(title);
+              try { outer.style.display = 'flex'; outer.style.flexDirection = 'column'; outer.style.justifyContent = 'center'; outer.style.alignItems = 'center'; } catch (e) {}
+              outer.appendChild(leaderDiv);
+              outer.appendChild(evalDiv);
             }
           }
         } catch (err) {
@@ -371,6 +383,17 @@ export default function ReportesPage() {
         }
         // remove interactive elements that aren't needed (do this after replacing the search block)
         clone.querySelectorAll('input, button, select, textarea').forEach(n => n.remove());
+        // remove any visible labels like 'Buscar evaluado...' so they don't appear in the PDF
+        try {
+          clone.querySelectorAll('label').forEach(l => {
+            const txt = (l.textContent || '').trim().toLowerCase();
+            if (txt.includes('buscar evaluado') || txt.includes('buscar por') || txt.includes('buscar')) {
+              const parent = l.closest('div');
+              if (parent) parent.remove(); else l.remove();
+            }
+          });
+        } catch (e) {}
+
         // position off-screen and append
         clone.style.position = 'fixed';
         clone.style.left = '-9999px';
@@ -380,19 +403,79 @@ export default function ReportesPage() {
       }
 
       const captureEl = targetElement || el;
-      const canvas = await html2canvas(captureEl as HTMLElement, { scale: 2 });
-      const imgData = canvas.toDataURL('image/png');
       // dynamic import jspdf to avoid build errors when not installed
       const jspdfMod: any = await import('jspdf').catch(() => null);
       if (!jspdfMod) {
         alert('La librería jspdf no está disponible. Instálala con `npm install jspdf` para habilitar la descarga como PDF.');
+        try { if (targetElement) document.body.removeChild(targetElement); } catch(e){}
         return;
       }
       const jsPDFClass: any = jspdfMod.jsPDF || jspdfMod.default || jspdfMod;
       const pdf = new jsPDFClass('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      const pdfHeightMm = pdf.internal.pageSize.getHeight();
+      const marginMm = 12; // mm
+      const availableWidthMm = pdfWidth - marginMm * 2;
+
+      // If the DOM has explicit page sections, render each separately (chart+table groups)
+      const sections = Array.from((captureEl as HTMLElement).querySelectorAll('[data-pdf-page]')) as HTMLElement[];
+      const displayName = selectedCodigo ? (datos.find(dd => String(dd.codigo) === String(selectedCodigo))?.nombre || selectedCodigo) : '';
+
+      const renderElementPages = async (element: HTMLElement, addFirstPage: boolean) => {
+        const canvas = await html2canvas(element as HTMLElement, { scale: 2 });
+        const pxPerMm = canvas.width / pdfWidth;
+        const availableHeightMm = pdfHeightMm - marginMm * 2;
+        const pageHeightPx = Math.floor(pxPerMm * availableHeightMm);
+        let y = 0;
+        let pageIdx = 0;
+        while (y < canvas.height) {
+          const sliceH = Math.min(pageHeightPx, canvas.height - y);
+          const tmp = document.createElement('canvas'); tmp.width = canvas.width; tmp.height = sliceH;
+          const ctx = tmp.getContext('2d'); if (!ctx) break;
+          ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,tmp.width,tmp.height);
+          ctx.drawImage(canvas, 0, y, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+          const imgData = tmp.toDataURL('image/png');
+          const imgH_mm = sliceH / pxPerMm;
+          if (pageIdx > 0 || !addFirstPage) pdf.addPage();
+          pdf.addImage(imgData, 'PNG', marginMm, marginMm, availableWidthMm, imgH_mm);
+          y += sliceH; pageIdx += 1;
+        }
+      };
+
+      if (sections.length) {
+        const evalCountForDisplay = selectedCodigo ? (datos.find(dd => String(dd.codigo) === String(selectedCodigo))?.evaluadores || 0) : 0;
+        for (let i = 0; i < sections.length; i++) {
+          // create a wrapper with header and spacing so header is visible and content not at top
+          const wrapper = document.createElement('div');
+          wrapper.style.width = '1200px'; wrapper.style.boxSizing = 'border-box'; wrapper.style.padding = '18px'; wrapper.style.background = '#fff';
+          const leaderHeader = document.createElement('div'); leaderHeader.textContent = `LIDER: ${displayName}`; leaderHeader.style.fontWeight = '800'; leaderHeader.style.fontSize = '16px'; leaderHeader.style.marginBottom = '6px'; leaderHeader.style.textAlign = 'center'; wrapper.appendChild(leaderHeader);
+          const evalHeader = document.createElement('div'); evalHeader.textContent = `Número de evaluadores: ${evalCountForDisplay}`; evalHeader.style.fontWeight = '700'; evalHeader.style.fontSize = '13px'; evalHeader.style.marginBottom = '12px'; evalHeader.style.textAlign = 'center'; wrapper.appendChild(evalHeader);
+          const cloneSec = sections[i].cloneNode(true) as HTMLElement; cloneSec.style.width = '100%'; wrapper.appendChild(cloneSec);
+          wrapper.style.position = 'fixed'; wrapper.style.left = '-9999px'; document.body.appendChild(wrapper);
+          await renderElementPages(wrapper, i === 0);
+          try { document.body.removeChild(wrapper); } catch(e){}
+        }
+      } else {
+        // fallback: capture whole area but split into pages to avoid overflow
+        const canvas = await html2canvas(captureEl as HTMLElement, { scale: 2 });
+        const pxPerMm = canvas.width / pdfWidth;
+        const availableHeightMm = pdfHeightMm - marginMm * 2;
+        const pageHeightPx = Math.floor(pxPerMm * availableHeightMm);
+        let y = 0; let pageIdx = 0;
+        while (y < canvas.height) {
+          const sliceH = Math.min(pageHeightPx, canvas.height - y);
+          const tmp = document.createElement('canvas'); tmp.width = canvas.width; tmp.height = sliceH;
+          const ctx = tmp.getContext('2d'); if (!ctx) break;
+          ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,tmp.width,tmp.height);
+          ctx.drawImage(canvas, 0, y, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+          const imgData = tmp.toDataURL('image/png');
+          const imgH_mm = sliceH / pxPerMm;
+          if (pageIdx > 0) pdf.addPage();
+          pdf.addImage(imgData, 'PNG', marginMm, marginMm, availableWidthMm, imgH_mm);
+          y += sliceH; pageIdx += 1;
+        }
+      }
+
       const timestamp = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
       const fileName = `${fileBaseName ? `${fileBaseName}-${timestamp}` : `reporte-${timestamp}`}.pdf`;
       pdf.save(fileName);
@@ -570,7 +653,7 @@ const radarOptions = React.useMemo(() => {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 18 }}>
         <div style={{ background: '#fff', padding: 12, borderRadius: 8, border: '1px solid rgba(15,23,42,0.04)' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 22, alignItems: 'start' }}>
-            <div>
+            <div data-pdf-page>
               <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 16, fontSize: 13 }}>
                   <thead>
                     <tr style={{ background: '#8B7355' }}>
@@ -734,7 +817,7 @@ const radarOptions = React.useMemo(() => {
                 </div>
               </div>
             </div>
-            <div>
+            <div data-pdf-page>
               <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>Estilos</div>
               {(() => {
                 const source = selectedCodigo ? datos.filter(d => String(d.codigo) === String(selectedCodigo)) : [];
