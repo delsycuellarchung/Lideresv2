@@ -655,32 +655,37 @@ const radarOptions = React.useMemo(() => {
         <div style={{ background: '#fff', padding: 12, borderRadius: 8, border: '1px solid rgba(15,23,42,0.04)' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 22, alignItems: 'start' }}>
             <div data-pdf-page>
-              <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 16, fontSize: 13 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 16, fontSize: 13, tableLayout: 'fixed' }}>
+                <colgroup>
+                  <col style={{ width: '20%' }} />
+                  <col style={{ width: '40%' }} />
+                  <col style={{ width: '40%' }} />
+                </colgroup>
                 <thead>
                   <tr style={{ background: '#8B7355' }}>
-                    <td style={{ padding: '6px 12px', color: '#fff', fontWeight: 700, textAlign: 'center' }}>Tipo</td>
-                    <td style={{ padding: '6px 12px', color: '#fff', fontWeight: 700, textAlign: 'center' }}>Más utilizados</td>
-                    <td style={{ padding: '6px 12px', color: '#fff', fontWeight: 700, textAlign: 'center' }}>Menos utilizados</td>
+                    <td style={{ padding: '6px 12px', color: '#fff', fontWeight: 700, textAlign: 'left' }}>Tipo</td>
+                    <td style={{ padding: '6px 12px', color: '#fff', fontWeight: 700, textAlign: 'left' }}>Más utilizados</td>
+                    <td style={{ padding: '6px 12px', color: '#fff', fontWeight: 700, textAlign: 'left' }}>Menos utilizados</td>
                   </tr>
                 </thead>
                 <tbody>
                   <tr style={{ border: '1px solid #d1c9b0' }}>
-                    <td style={{ padding: '6px 12px', fontWeight: 700, background: '#f5f0e8' }}>Competencia</td>
-                    <td style={{ padding: '6px 12px' }}>{masYMenos?.maxComp?.label ?? '-'}</td>
-                    <td style={{ padding: '6px 12px' }}>{masYMenos?.minComp?.label ?? '-'}</td>
+                    <td style={{ padding: '6px 12px', fontWeight: 700, background: '#f5f0e8', textAlign: 'left' }}>Competencia</td>
+                    <td style={{ padding: '6px 12px', textAlign: 'left' }}>{masYMenos?.maxComp?.label ? (masYMenos.maxComp.label.charAt(0).toUpperCase() + String(masYMenos.maxComp.label).slice(1).toLowerCase()) : '-'}</td>
+                    <td style={{ padding: '6px 12px', textAlign: 'left' }}>{masYMenos?.minComp?.label ? (masYMenos.minComp.label.charAt(0).toUpperCase() + String(masYMenos.minComp.label).slice(1).toLowerCase()) : '-'}</td>
                   </tr>
                   <tr style={{ border: '1px solid #d1c9b0' }}>
-                    <td style={{ padding: '6px 12px', fontWeight: 700, background: '#f5f0e8' }}>Estilo</td>
-                    <td style={{ padding: '6px 12px' }}>{masYMenos?.maxEst?.label ? masYMenos.maxEst.label.charAt(0).toUpperCase() + masYMenos.maxEst.label.slice(1).toLowerCase() : '-'}</td>
-                    <td style={{ padding: '6px 12px' }}>{masYMenos?.minEst?.label ? masYMenos.minEst.label.charAt(0).toUpperCase() + masYMenos.minEst.label.slice(1).toLowerCase() : '-'}</td>
+                    <td style={{ padding: '6px 12px', fontWeight: 700, background: '#f5f0e8', textAlign: 'left' }}>Estilo</td>
+                    <td style={{ padding: '6px 12px', textAlign: 'left' }}>{masYMenos?.maxEst?.label ? (masYMenos.maxEst.label.charAt(0).toUpperCase() + String(masYMenos.maxEst.label).slice(1).toLowerCase()) : '-'}</td>
+                    <td style={{ padding: '6px 12px', textAlign: 'left' }}>{masYMenos?.minEst?.label ? (masYMenos.minEst.label.charAt(0).toUpperCase() + String(masYMenos.minEst.label).slice(1).toLowerCase()) : '-'}</td>
                   </tr>
                 </tbody>
               </table>
-                  <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>COMPETENCIAS</div>
+                  <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>Competencias</div>
               {(() => {
                 const source = selectedCodigo
-  ? datos.filter(d => String(d.codigo) === String(selectedCodigo))
-  : [];
+          ? datos.filter(d => String(d.codigo) === String(selectedCodigo))
+          : [];
                 if (!source.length) return null;
                 const d = source[0];
                 // Order competencies by average descending for this evaluado
@@ -701,7 +706,7 @@ const radarOptions = React.useMemo(() => {
                   <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 16, fontSize: 12 }}>
                     <thead>
                       <tr style={{ background: '#00AEEF' }}>
-                        <td colSpan={headerComps.length} style={{ padding: '6px 12px', color: '#fff', fontWeight: 700, textAlign: 'center' }}>COMPETENCIAS DE LIDERAZGO</td>
+                        <td colSpan={headerComps.length} style={{ padding: '6px 12px', color: '#fff', fontWeight: 700, textAlign: 'left' }}>Competencias de Liderazgo</td>
                       </tr>
                       <tr style={{ background: '#e8f4fb', fontWeight: 700 }}>
                         {headerComps.map(h => (
@@ -760,7 +765,7 @@ const radarOptions = React.useMemo(() => {
                           <td style={{ width: 28, padding: '10px 8px' }}>
                             <div style={{ width: 12, height: 12, borderRadius: 3, background: '#10B981', margin: '4px 0' }} />
                           </td>
-                          <td style={{ padding: '10px 8px', fontWeight: 700 }}>Desarrollo y Empowerment</td>
+                          <td style={{ padding: '10px 8px', fontWeight: 700 }}>Desarrollo de equipo y empowerment</td>
                         </tr>
                         <tr>
                           <td />
@@ -824,15 +829,25 @@ const radarOptions = React.useMemo(() => {
                   <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 16, fontSize: 12 }}>
                     <thead>
                       <tr style={{ background: '#4B6E2E' }}>
-                        <td colSpan={estilosKeys.length} style={{ padding: '6px 12px', color: '#fff', fontWeight: 700, textAlign: 'center' }}>ESTILOS DE LIDERAZGO</td>
+                        <td colSpan={estilosKeys.length} style={{ padding: '6px 12px', color: '#fff', fontWeight: 700, textAlign: 'left' }}>Estilos de Liderazgo</td>
                       </tr>
                       <tr style={{ background: '#e8f0e0', fontWeight: 700 }}>
-                        {estilosKeys.map(k => <td key={k} style={{ padding: '6px 8px', border: '1px solid #ccc', textAlign: 'center' }}>{String(k).toLowerCase()}</td>)}
+                        {estilosKeys.map(k => <td key={k} style={{ padding: '6px 8px', border: '1px solid #ccc', textAlign: 'center' }}>{String(k).charAt(0).toUpperCase() + String(k).slice(1).toLowerCase()}</td>)}
                       </tr>
                     </thead>
                     <tbody>
                       <tr>
-                        {estilosKeys.map(k => <td key={k} style={{ padding: '6px 8px', border: '1px solid #ccc', textAlign: 'center' }}>{d.estilos[k] ?? '-'}</td>)}
+                        {estilosKeys.map(k => {
+                          const raw = d.estilos?.[k];
+                          const isEmpty = raw === null || raw === undefined || raw === '';
+                          let disp: any = '-';
+                          if (!isEmpty) {
+                            if (typeof raw === 'number' && !isNaN(raw)) disp = raw.toFixed(2);
+                            else if (!isNaN(Number(String(raw)))) disp = Number(String(raw)).toFixed(2);
+                            else disp = String(raw);
+                          }
+                          return <td key={k} style={{ padding: '6px 8px', border: '1px solid #ccc', textAlign: 'center' }}>{disp}</td>;
+                        })}
                       </tr>
                     </tbody>
                   </table>
@@ -868,7 +883,7 @@ const radarOptions = React.useMemo(() => {
                           <td style={{ width: 28, padding: '10px 8px' }}>
                             <div style={{ width: 12, height: 12, borderRadius: 3, background: '#4B6E2E', margin: '4px 0' }} />
                           </td>
-                          <td style={{ padding: '10px 8px', fontWeight: 700 }}>Autocrático o Directivo</td>
+                          <td style={{ padding: '10px 8px', fontWeight: 700 }}>Autocrático</td>
                         </tr>
                         <tr>
                           <td />
@@ -890,7 +905,7 @@ const radarOptions = React.useMemo(() => {
                           <td style={{ width: 28, padding: '10px 8px' }}>
                             <div style={{ width: 12, height: 12, borderRadius: 3, background: '#0ea5b7', margin: '4px 0' }} />
                           </td>
-                          <td style={{ padding: '10px 8px', fontWeight: 700 }}>Democrático o Participativo</td>
+                          <td style={{ padding: '10px 8px', fontWeight: 700 }}>Democrático</td>
                         </tr>
                         <tr>
                           <td />
