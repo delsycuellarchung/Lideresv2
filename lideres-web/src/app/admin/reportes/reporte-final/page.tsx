@@ -17,10 +17,26 @@ export default function ReporteFinalPage() {
       const html2canvasMod = await import('html2canvas').catch(() => null);
       if (!html2canvasMod) { alert('Instala html2canvas (npm install html2canvas) para descargar PDF.'); return; }
       const html2canvas = html2canvasMod.default || html2canvasMod;
-      const canvas = await html2canvas(reportRef.current as HTMLElement, { scale: 2 });
+
+      // clone the report so we can modify the cloned DOM for PDF without affecting the page
+      const el = reportRef.current as HTMLElement;
+      const clone = el.cloneNode(true) as HTMLElement;
+
+      // remove interactive controls so they don't appear in the PDF
+      try {
+        clone.querySelectorAll('input, button, select, textarea, datalist').forEach(n => n.remove());
+      } catch (err) {
+        // ignore DOM manipulation errors
+      }
+      clone.style.position = 'fixed';
+      clone.style.left = '-9999px';
+      clone.style.top = '0';
+      document.body.appendChild(clone);
+
+      const canvas = await html2canvas(clone as HTMLElement, { scale: 2 });
       const imgData = canvas.toDataURL('image/png');
       const jspdfMod: any = await import('jspdf').catch(() => null);
-      if (!jspdfMod) { alert('Instala jspdf (npm install jspdf) para descargar PDF.'); return; }
+      if (!jspdfMod) { alert('Instala jspdf (npm install jspdf) para descargar PDF.'); try { document.body.removeChild(clone); } catch(e){} return; }
       const jsPDFClass: any = jspdfMod.jsPDF || jspdfMod.default || jspdfMod;
       const pdf = new jsPDFClass('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
@@ -29,6 +45,8 @@ export default function ReporteFinalPage() {
       const timestamp = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
       const fn = `reporte-final-${codigo || 'sin-codigo'}-${timestamp}.pdf`;
       pdf.save(fn);
+
+      try { document.body.removeChild(clone); } catch(e) { /* ignore */ }
     } catch (e) {
       console.error('Error generando PDF', e);
       alert('Error al generar PDF. Revisa la consola.');
