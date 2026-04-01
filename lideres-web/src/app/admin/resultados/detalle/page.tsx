@@ -3,6 +3,7 @@
 import React from 'react';
 import { GeneralDonut } from '@/components/GeneralDonut';
 import { mapLabelToNumeric } from '@/lib/scaleMapper';
+import { exportDetalle } from '@/lib/excelExporter';
 import { supabase } from '@/lib/supabaseClient';
 
 type Afirm = { codigo?: string; pregunta: string; tipo?: string | null; categoria?: string };
@@ -390,7 +391,35 @@ setAllResponses(normalized);
             <label style={{ fontSize: 13, fontWeight: 700, color: '#374151', marginRight: 8 }}>Evaluadores</label>
             <input disabled value={(selectedData?.evaluadores ?? 0).toString()} placeholder="# Evaluadores" style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid rgba(15,23,42,0.08)', width: 120, textAlign: 'center', background: '#cbd5e1', color: '#0f172a' }} />
           
-            <button title="Exportar Excel" className="btn-press icon-btn" style={{ padding: '8px 12px', fontSize: 14 }}>
+            <button title="Exportar Excel" className="btn-press icon-btn" onClick={async () => {
+              try {
+                // choose entries: if a specific code is selected export only that (averages); else export template (no averages)
+                const code = selectedCode?.toString()?.trim();
+                const entriesToExport = code
+                  ? allResponses.filter(r => String(r.evaluadoCodigo) === code)
+                  : (selectedName ? allResponses.filter(r => (r.evaluadoNombre || '').toString() === selectedName) : []);
+
+                if ((code || selectedName) && !entriesToExport.length) { alert('No hay respuestas para la selección actual'); return; }
+
+                // fetch instrucciones from server or fallback to localStorage (kept for compatibility)
+                let instrucciones: string[] = [];
+                try {
+                  const resp = await fetch('/api/formulario');
+                  if (resp.ok) {
+                    const j = await resp.json().catch(() => ({}));
+                    if (Array.isArray(j.instrucciones)) instrucciones = j.instrucciones;
+                  }
+                } catch (e) {}
+                if (!instrucciones.length) {
+                  try { instrucciones = JSON.parse(window.localStorage.getItem('formulario_instrucciones') || '[]') || []; } catch (e) { instrucciones = []; }
+                }
+
+                await exportDetalle(entriesToExport as any, afirmaciones || [], competenciasList || [], estilosList || []);
+              } catch (e) {
+                console.error('Error al exportar Excel:', e);
+                alert('Error al exportar Excel. Revisa la consola.');
+              }
+            }} style={{ padding: '8px 12px', fontSize: 14 }}>
               <img src="/images/descargar.png" alt="Excel" style={{ width: 18, height: 18, marginRight: 8 }} />Excel
             </button>
           </div>

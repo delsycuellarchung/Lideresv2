@@ -17,12 +17,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
   const [formOpen, setFormOpen] = useState(false);
   const [resultOpen, setResultOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const disableDb = String(process.env.NEXT_PUBLIC_DISABLE_DB || '').toLowerCase() === 'true';
   const devAuth = String(process.env.NEXT_PUBLIC_DEV_AUTH || '').toLowerCase();
   useEffect(() => {
     if (pathname?.startsWith("/admin/formulario")) setFormOpen(true);
     if (pathname?.startsWith("/admin/resultados")) setResultOpen(true);
+    if (pathname?.startsWith("/admin/reportes")) setReportOpen(true);
   }, [pathname]);
   const topbarMarginTop = -8;
   
@@ -181,14 +183,31 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     </Link>
                   </div>
                 )}
-                <Link href="/admin/reportes" className={"menu-btn " + (pathname?.startsWith("/admin/reportes") ? "active" : "") } aria-current={pathname?.startsWith('/admin/reportes') ? 'page' : undefined} title="Reportes">
-                  <span className="menu-icon" aria-hidden>
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-                      <path d="M3 3h18v4H3V3zm0 7h18v11H3V10z" fill="currentColor" />
-                    </svg>
+                <button
+                  type="button"
+                  className={"menu-btn " + (pathname?.startsWith("/admin/reportes") ? "active" : "")}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', position: 'relative' }}
+                  onClick={() => setReportOpen((v) => !v)}
+                  aria-expanded={reportOpen}
+                  aria-controls="submenu-reportes"
+                >
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span className="menu-icon" aria-hidden>
+                      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+                        <path d="M3 3h18v4H3V3zm0 7h18v11H3V10z" fill="currentColor" />
+                      </svg>
+                    </span>
+                    <span className="menu-label">Reportes</span>
                   </span>
-                  <span className="menu-label">Reportes</span>
-                </Link>
+                  <span style={{ fontSize: 13, transition: 'transform 0.2s', position: 'absolute', right: 20, top: '50%', transform: reportOpen ? 'translateY(-50%) rotate(180deg)' : 'translateY(-50%)' }}>▼</span>
+                </button>
+                {reportOpen && (
+                  <div id="submenu-reportes" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <Link href="/admin/reportes/reporte-final" className={"menu-btn " + (pathname?.startsWith("/admin/reportes/reporte-final") ? "active" : "") } style={{ paddingLeft: 28 }} aria-current={pathname?.startsWith('/admin/reportes/reporte-final') ? 'page' : undefined} title="Reporte Final">
+                      <span className="menu-label">Reporte Final</span>
+                    </Link>
+                  </div>
+                )}
                 <Link href="/admin/gestion" className={"menu-btn " + (pathname?.startsWith("/admin/gestion") ? "active" : "") } aria-current={pathname?.startsWith('/admin/gestion') ? 'page' : undefined} title="Gestión">
                   <span className="menu-icon" aria-hidden>
                     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
