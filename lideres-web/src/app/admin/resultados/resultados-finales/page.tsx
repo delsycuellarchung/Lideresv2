@@ -101,25 +101,52 @@ export default function ResultadosFinalesPage() {
           estRows.push(row);
         } catch (e) {}
       });
+      // Build estilos table and improve layout for printing: fixed layout + explicit column widths
       const estTable = createTable(estHeaders, estRows);
-
-      // Make the "Evaluado" column left-aligned and allow wrapping so full names show
       try {
-        const ths = Array.from(estTable.querySelectorAll('th'));
+        estTable.style.tableLayout = 'fixed';
+        // Build colgroup with sensible widths: Cod small, Evaluado wide, Fecha small, #Evaluadores small,
+        // then one small column per estilo, finally Promedio small.
+        const colgroup = document.createElement('colgroup');
+        const cols: string[] = [];
+        cols.push('60px'); // Cod
+        cols.push('200px'); // Evaluado (wide to show full names)
+        cols.push('80px'); // Fecha
+        cols.push('70px'); // Número de evaluadores
+        // estilosCols may vary; allocate narrower width per estilo column so all fit
+        const estiloColPx = '48px';
+        (estilosCols || []).forEach(() => cols.push(estiloColPx));
+        cols.push('50px'); // Promedio
+        cols.forEach(w => {
+          const c = document.createElement('col');
+          c.style.width = w;
+          colgroup.appendChild(c);
+        });
+        // insert colgroup before thead
+        if (estTable.firstChild) estTable.insertBefore(colgroup, estTable.firstChild);
+
+        // Adjust header and cells: left-align Evaluado column and allow wrapping
+        const ths = Array.from(estTable.querySelectorAll('th')) as HTMLElement[];
         if (ths[1]) {
           ths[1].style.textAlign = 'left';
-          ths[1].style.width = '220px';
           ths[1].style.whiteSpace = 'normal';
           ths[1].style.wordBreak = 'break-word';
+          ths[1].style.padding = '6px 8px';
         }
-        const rows = Array.from(estTable.querySelectorAll('tbody tr')) as HTMLTableRowElement[];
-        rows.forEach(r => {
+        const rowsDom = Array.from(estTable.querySelectorAll('tbody tr')) as HTMLTableRowElement[];
+        rowsDom.forEach(r => {
           const cells = Array.from(r.children) as HTMLElement[];
+          // Evaluado column is index 1
           if (cells[1]) {
             cells[1].style.textAlign = 'left';
             cells[1].style.whiteSpace = 'normal';
             cells[1].style.wordBreak = 'break-word';
-            cells[1].style.maxWidth = '220px';
+            cells[1].style.maxWidth = '200px';
+            cells[1].style.padding = '6px 8px';
+          }
+          // Reduce font size slightly for estilo value cells so they fit
+          for (let i = 4; i < cells.length - 1; i++) {
+            try { cells[i].style.fontSize = '10px'; cells[i].style.padding = '5px 6px'; } catch (e) {}
           }
         });
       } catch (e) {
